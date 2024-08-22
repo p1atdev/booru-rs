@@ -1,5 +1,5 @@
 [package]
-name = "danbooru-rs"
+name = "danbooru"
 version = "0.1.0"
 edition = "2021"
 
@@ -20,6 +20,9 @@ reqwest = { version = "0.12.7", features = [
     "brotli",
     "rustls-tls",
 ] }
-serde = "1.0.208"
+serde = { version = "1.0.208", features = ["derive"] }
 serde_json = "1.0.125"
 tokio = { version = "1.39.3", features = ["full"] }
+
+[dev-dependencies]
+dotenv = "0.15.0"
