@@ -1,0 +1,25 @@
+[package]
+name = "danbooru-rs"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "danbooru"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+
+[dependencies]
+anyhow = "1.0.86"
+base64 = "0.22.1"
+reqwest = { version = "0.12.7", features = [
+    "json",
+    "http3",
+    "zstd",
+    "brotli",
+    "rustls-tls",
+] }
+serde = "1.0.208"
+serde_json = "1.0.125"
+tokio = { version = "1.39.3", features = ["full"] }
