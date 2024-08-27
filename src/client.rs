@@ -107,7 +107,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        board::{danbooru, BoardResponse},
+        board::{danbooru, BoardResponse, BoardSearchTagsBuilder},
         test_utils::Env,
     };
 
@@ -125,7 +125,7 @@ mod tests {
         let auth = Auth::new(&env.username, &env.api_key);
         let client = Client::danbooru(auth).unwrap();
 
-        let mut query = danbooru::Query::posts(None);
+        let mut query = danbooru::Query::new();
         query.limit(3);
 
         let url = client.compose(danbooru::Endpoint::Posts, query).unwrap();
@@ -135,5 +135,41 @@ mod tests {
 
         let posts = danbooru::response::posts::Posts::from_str(&res.text().await.unwrap()).unwrap();
         assert_eq!(posts.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_search_posts() {
+        let env = Env::new();
+
+        let auth = Auth::new(&env.username, &env.api_key);
+        let client = Client::danbooru(auth).unwrap();
+
+        let mut builder = danbooru::SearchTagsBuilder::new();
+        builder.add_tag("2girls");
+        builder.add_tag("cat_ears");
+        builder.ratings(vec![danbooru::Rating::General]);
+        let filetypes = vec![danbooru::FileExt::Webp];
+        builder.filetypes(filetypes.clone());
+        builder.scores(vec![danbooru::search::Score::Min(10)]); // score:>=10
+
+        let mut query = danbooru::Query::posts(&builder.build());
+        query.limit(3);
+
+        let url = client.compose(danbooru::Endpoint::Posts, query).unwrap();
+        let res = client.get(url).await.unwrap();
+
+        assert!(res.status().is_success());
+
+        let posts = danbooru::response::Posts::from_str(&res.text().await.unwrap()).unwrap();
+        assert_eq!(posts.len(), 3);
+
+        // check
+        for post in posts {
+            assert!(post.tag_string_general.contains("2girls"));
+            assert!(post.tag_string_general.contains("cat_ears"));
+            assert_eq!(post.rating, danbooru::Rating::General);
+            assert!(filetypes.contains(&post.file_ext));
+            assert!(post.score >= 10);
+        }
     }
 }

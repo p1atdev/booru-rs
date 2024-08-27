@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use indexmap::IndexMap;
 
@@ -6,27 +6,34 @@ use crate::board::BoardSearchTagsBuilder;
 
 use super::{FileExt, Rating};
 
-/// search condition for filtering by the score
+/// filtering using one or more conditions
 #[derive(Debug, Clone)]
-pub enum Score {
-    MinMax { min: i32, max: i32 },
-    Min(i32),
-    Max(i32),
-    Exact(i32),
+pub enum Range<T: Display> {
+    MinMax { min: T, max: T },
+    Min(T),
+    Max(T),
+    Exact(T),
 }
 
-impl ToString for Score {
+impl<T: Display> ToString for Range<T> {
     fn to_string(&self) -> String {
         match self {
-            Score::MinMax { min, max } => format!("{}..{}", min, max),
-            Score::Min(min) => format!("{}..", min),
-            Score::Max(max) => format!("..{}", max),
-            Score::Exact(exact) => exact.to_string(),
+            Range::MinMax { min, max } => format!("{}..{}", min, max),
+            Range::Min(min) => format!("{}..", min),
+            Range::Max(max) => format!("..{}", max),
+            Range::Exact(exact) => exact.to_string(),
         }
     }
 }
 
+/// score range
+pub type Score = Range<i32>;
+
+/// date range
+pub type Date = Range<String>;
+
 /// danbooru search tags builder
+#[derive(Debug, Clone)]
 pub struct SearchTagsBuilder {
     tags: Vec<String>,
     metatags: IndexMap<String, Vec<String>>,
@@ -104,6 +111,18 @@ impl SearchTagsBuilder {
                 .join(","),
         );
     }
+
+    /// set date metatag
+    pub fn dates(&mut self, dates: Vec<Date>) {
+        self.append_metatag(
+            "date",
+            &dates
+                .iter()
+                .map(|d| d.to_string())
+                .collect::<Vec<String>>()
+                .join(","),
+        );
+    }
 }
 
 #[cfg(test)]
@@ -118,14 +137,25 @@ mod test {
         builder.ratings(vec![Rating::General, Rating::Sensitive]);
         builder.filetypes(vec![FileExt::Jpg, FileExt::Png]);
         builder.scores(vec![Score::MinMax { min: 50, max: 100 }]);
+        builder.dates(vec![Date::MinMax {
+            min: "2000-01-23".to_string(),
+            max: "2024-10-20".to_string(),
+        }]);
 
         assert_eq!(builder.tags(), vec!["1girl", "solo"]);
         assert_eq!(builder.metatags().get("rating").unwrap(), "g,s");
         assert_eq!(builder.metatags().get("filetype").unwrap(), "jpg,png");
         assert_eq!(builder.metatags().get("score").unwrap(), "50..100");
+        assert_eq!(
+            builder.metatags().get("date").unwrap(),
+            "2000-01-23..2024-10-20"
+        );
 
         let tags = builder.build();
 
-        assert_eq!(tags, "1girl solo rating:g,s filetype:jpg,png score:50..100");
+        assert_eq!(
+            tags,
+            "1girl solo rating:g,s filetype:jpg,png score:50..100 date:2000-01-23..2024-10-20"
+        );
     }
 }

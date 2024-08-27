@@ -1,19 +1,18 @@
 pub mod response;
 pub mod search;
 
-use std::{collections::HashMap, str::FromStr};
-
-use anyhow::Result;
-use indexmap::IndexMap;
+use super::{BoardEndpoint, BoardQuery};
 use serde::{Deserialize, Serialize};
-
-use super::{BoardEndpoint, BoardQuery, BoardResponse, BoardSearchTagsBuilder};
 
 pub const HOST: &str = "https://danbooru.donmai.us";
 
+// -- re-exports
+
+pub use search::SearchTagsBuilder;
+
 // -- commmon types --
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Rating {
     #[serde(rename = "g")]
     General,
@@ -36,7 +35,7 @@ impl ToString for Rating {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum FileExt {
     #[serde(alias = "jpeg")]
@@ -61,7 +60,6 @@ impl ToString for FileExt {
             FileExt::Mp4 => "mp4".to_string(),
             FileExt::Gif => "gif".to_string(),
             FileExt::Avif => "avif".to_string(),
-            // FileExt::Other => "other".to_string(),
         }
     }
 }
@@ -94,11 +92,9 @@ impl Query {
     }
 
     /// request parameters for /posts.json
-    pub fn posts(tags: Option<&str>) -> Self {
+    pub fn posts(tags: &str) -> Self {
         let mut query = Query::new();
-        if tags.is_some() {
-            query.insert("tags", tags.unwrap());
-        }
+        query.insert("tags", tags);
         query
     }
 
@@ -142,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_query_to_string() {
-        let mut query = Query::posts(Some("1girl"));
+        let mut query = Query::posts("1girl");
         query.insert("limit", 3);
         assert_eq!(query.to_string(), "tags=1girl&limit=3");
     }

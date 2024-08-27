@@ -2,6 +2,7 @@ use super::post::Post;
 use crate::board::BoardResponse;
 use anyhow::Result;
 
+/// response type for /posts    
 pub type Posts = Vec<Post>;
 
 impl BoardResponse for Posts {

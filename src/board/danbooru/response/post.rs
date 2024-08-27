@@ -3,101 +3,101 @@ use crate::board::BoardResponse;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-/// Danbooru Post
+/// response type for /post
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Post {
-    id: i64,
-    created_at: String,
-    updated_at: String,
+    pub id: i64,
+    pub created_at: String,
+    pub updated_at: String,
 
     // score
-    score: i64,
-    source: String,
-    up_score: i64,
-    down_score: i64,
-    fav_count: i64,
-    rating: Rating,
+    pub score: i64,
+    pub source: String,
+    pub up_score: i64,
+    pub down_score: i64,
+    pub fav_count: i64,
+    pub rating: Rating,
 
     // image size
-    image_width: i64,
-    image_height: i64,
+    pub image_width: i64,
+    pub image_height: i64,
 
     // tag
-    tag_count: i64,
-    tag_string: String,
-    tag_string_general: String,
-    tag_string_character: String,
-    tag_string_copyright: String,
-    tag_string_artist: String,
-    tag_string_meta: String,
-    tag_count_general: i64,
-    tag_count_artist: i64,
-    tag_count_character: i64,
-    tag_count_copyright: i64,
-    tag_count_meta: i64,
+    pub tag_count: i64,
+    pub tag_string: String,
+    pub tag_string_general: String,
+    pub tag_string_character: String,
+    pub tag_string_copyright: String,
+    pub tag_string_artist: String,
+    pub tag_string_meta: String,
+    pub tag_count_general: i64,
+    pub tag_count_artist: i64,
+    pub tag_count_character: i64,
+    pub tag_count_copyright: i64,
+    pub tag_count_meta: i64,
 
     // url
-    has_large: bool,
-    media_asset: MediaAsset,
-    file_url: String,
-    large_file_url: String,
-    preview_file_url: String,
+    pub has_large: bool,
+    pub media_asset: MediaAsset,
+    pub file_url: String,
+    pub large_file_url: String,
+    pub preview_file_url: String,
 
     // relation
-    parent_id: Option<i64>,
-    has_children: bool,
-    has_active_children: bool,
-    has_visible_children: bool,
+    pub parent_id: Option<i64>,
+    pub has_children: bool,
+    pub has_active_children: bool,
+    pub has_visible_children: bool,
 
     // user
-    last_commented_at: Option<String>,
-    last_comment_bumped_at: Option<String>,
-    last_noted_at: Option<String>,
+    pub last_commented_at: Option<String>,
+    pub last_comment_bumped_at: Option<String>,
+    pub last_noted_at: Option<String>,
 
     // file
-    file_size: i64,
-    file_ext: String,
-    md5: String,
+    pub file_size: i64,
+    pub file_ext: FileExt,
+    pub md5: String,
 
     // user
-    uploader_id: i64,
-    approver_id: Option<String>,
-    pixiv_id: Option<i64>,
+    pub uploader_id: i64,
+    pub approver_id: Option<i64>,
+    pub pixiv_id: Option<i64>,
 
     // status
-    is_pending: bool,
-    is_flagged: bool,
-    is_deleted: bool,
-    is_banned: bool,
-    bit_flags: i64,
+    pub is_pending: bool,
+    pub is_flagged: bool,
+    pub is_deleted: bool,
+    pub is_banned: bool,
+    pub bit_flags: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MediaAsset {
-    id: i64,
-    created_at: String,
-    updated_at: String,
-    md5: String,
-    file_ext: String,
-    file_size: i64,
-    image_width: i64,
-    image_height: i64,
-    duration: Option<f32>,
-    status: String,
-    file_key: String,
-    is_public: bool,
-    pixel_hash: String,
-    variants: Vec<Variant>,
+    pub id: i64,
+    pub created_at: String,
+    pub updated_at: String,
+    pub md5: String,
+    pub file_ext: FileExt,
+    pub file_size: i64,
+    pub image_width: i64,
+    pub image_height: i64,
+    pub duration: Option<f32>,
+    pub status: String,
+    pub file_key: String,
+    pub is_public: bool,
+    pub pixel_hash: String,
+    pub variants: Vec<Variant>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Variant {
     #[serde(rename = "type")]
-    variant_type: VariantType,
-    url: String,
-    width: i64,
-    height: i64,
-    file_ext: FileExt,
+    pub variant_type: VariantType,
+    pub url: String,
+    pub width: i64,
+    pub height: i64,
+    pub file_ext: FileExt,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
