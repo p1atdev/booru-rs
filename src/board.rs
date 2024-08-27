@@ -1,19 +1,21 @@
+use anyhow::Result;
 use std::collections::HashMap;
 
-use anyhow::Result;
-
 pub mod danbooru;
+pub mod safebooru;
 
 /// Supported WebSite enum
 #[derive(Debug, Clone)]
 pub enum Board {
     Danbooru,
+    Safebooru,
 }
 
 impl Board {
     pub fn host(&self) -> &str {
         match self {
             Board::Danbooru => danbooru::HOST,
+            Board::Safebooru => safebooru::HOST,
         }
     }
 }

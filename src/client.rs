@@ -69,10 +69,10 @@ impl Client {
         Client::new(Board::Danbooru, auth)
     }
 
-    // /// Create a new Safebooru Client
-    // pub fn safebooru(auth: Auth) -> Result<Self> {
-    //     Client::new(Board::Safebooru, auth)
-    // }
+    /// Create a new Safebooru Client
+    pub fn safebooru(auth: Auth) -> Result<Self> {
+        Client::new(Board::Safebooru, auth)
+    }
 }
 
 /// Methods
@@ -106,10 +106,8 @@ impl Client {
 mod tests {
     use super::*;
 
-    use crate::{
-        board::{danbooru, BoardResponse, BoardSearchTagsBuilder},
-        test_utils::Env,
-    };
+    use crate::board::{danbooru, safebooru, BoardResponse, BoardSearchTagsBuilder};
+    use crate::test_utils::Env;
 
     #[test]
     fn test_auth() {
@@ -119,7 +117,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_posts() {
+    async fn test_base_url() {
+        let env = Env::new();
+
+        let auth = Auth::new(&env.username, &env.api_key);
+        let client = Client::danbooru(auth.clone()).unwrap();
+
+        assert_eq!(client.board.host(), "https://danbooru.donmai.us");
+
+        let client = Client::safebooru(auth.clone()).unwrap();
+
+        assert_eq!(client.board.host(), "https://safebooru.donmai.us");
+    }
+
+    #[tokio::test]
+    async fn test_danbooru_get_posts() {
         let env = Env::new();
 
         let auth = Auth::new(&env.username, &env.api_key);
@@ -133,12 +145,12 @@ mod tests {
 
         assert!(res.status().is_success());
 
-        let posts = danbooru::response::posts::Posts::from_str(&res.text().await.unwrap()).unwrap();
+        let posts = danbooru::response::Posts::from_str(&res.text().await.unwrap()).unwrap();
         assert_eq!(posts.len(), 3);
     }
 
     #[tokio::test]
-    async fn test_search_posts() {
+    async fn test_danbooru_search_posts() {
         let env = Env::new();
 
         let auth = Auth::new(&env.username, &env.api_key);
@@ -171,5 +183,24 @@ mod tests {
             assert!(filetypes.contains(&post.file_ext));
             assert!(post.score >= 10);
         }
+    }
+
+    #[tokio::test]
+    async fn test_safebooru_get_posts() {
+        let env = Env::new();
+
+        let auth = Auth::new(&env.username, &env.api_key);
+        let client = Client::safebooru(auth).unwrap();
+
+        let mut query = safebooru::Query::new();
+        query.limit(10);
+
+        let url = client.compose(safebooru::Endpoint::Posts, query).unwrap();
+        let res = client.get(url).await.unwrap();
+
+        assert!(res.status().is_success());
+
+        let posts = safebooru::response::Posts::from_str(&res.text().await.unwrap()).unwrap();
+        assert_eq!(posts.len(), 10);
     }
 }
