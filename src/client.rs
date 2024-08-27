@@ -8,7 +8,7 @@ use reqwest::{
 };
 use serde::Serialize;
 
-use crate::board::Board;
+use crate::board::{Board, BoardEndpoint, BoardQuery};
 
 /// Auth struct
 #[derive(Debug, Clone)]
@@ -32,29 +32,6 @@ impl Auth {
             "Basic {}",
             general_purpose::STANDARD.encode(&format!("{}:{}", self.username, self.api_key))
         )
-    }
-}
-
-/// Query struct
-pub struct Query(HashMap<String, String>);
-
-impl Query {
-    /// Create a new Query struct
-    pub fn new() -> Self {
-        Query(HashMap::new())
-    }
-
-    /// convert to query string
-    pub fn to_string(&self) -> String {
-        self.0
-            .iter()
-            .map(|(k, v)| format!("{}={}", k, v))
-            .collect::<Vec<String>>()
-            .join("&")
-    }
-
-    pub fn insert<T: ToString, K: ToString>(&mut self, key: T, value: K) {
-        self.0.insert(key.to_string(), value.to_string());
     }
 }
 
@@ -92,19 +69,23 @@ impl Client {
         Client::new(Board::Danbooru, auth)
     }
 
-    /// Create a new Safebooru Client
-    pub fn safebooru(auth: Auth) -> Result<Self> {
-        Client::new(Board::Safebooru, auth)
-    }
+    // /// Create a new Safebooru Client
+    // pub fn safebooru(auth: Auth) -> Result<Self> {
+    //     Client::new(Board::Safebooru, auth)
+    // }
 }
 
 /// Methods
 impl Client {
-    /// Compose a url
-    pub fn compose(&self, path: &str, query: &Query) -> Result<Url> {
+    /// Compose a url with path
+    fn _compose(&self, path: &str, query: &str) -> Result<Url> {
         let mut url = Url::parse(self.board.host())?.join(path)?;
-        url.set_query(Some(&query.to_string()));
+        url.set_query(Some(&query));
         Ok(url)
+    }
+
+    pub fn compose<E: BoardEndpoint, Q: BoardQuery>(&self, endpoint: E, query: Q) -> Result<Url> {
+        self._compose(&endpoint.path(), &query.to_string())
     }
 
     /// create request builder
@@ -144,15 +125,15 @@ mod tests {
         let auth = Auth::new(&env.username, &env.api_key);
         let client = Client::danbooru(auth).unwrap();
 
-        let mut query = Query::new();
-        query.insert("limit", 3);
+        let mut query = danbooru::Query::posts(None);
+        query.limit(3);
 
-        let url = client.compose("/posts.json", &query).unwrap();
+        let url = client.compose(danbooru::Endpoint::Posts, query).unwrap();
         let res = client.get(url).await.unwrap();
 
         assert!(res.status().is_success());
 
-        let posts = danbooru::Posts::from_str(&res.text().await.unwrap()).unwrap();
+        let posts = danbooru::response::posts::Posts::from_str(&res.text().await.unwrap()).unwrap();
         assert_eq!(posts.len(), 3);
     }
 }
