@@ -26,11 +26,12 @@ impl Env {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let env = Env::new();
+    let env = Env::new(); // load env vars
 
     let auth = Auth::new(&env.username, &env.api_key);
-    let client = Client::danbooru(auth).unwrap();
+    let client = Client::danbooru(auth)?;
 
+    // search "tags" builder
     let mut builder = danbooru::SearchTagsBuilder::new();
     builder.add_tag("2girls");
     builder.add_tag("cat_ears");
@@ -43,14 +44,14 @@ async fn main() -> Result<()> {
     builder.filetypes(filetypes.clone());
     builder.scores(vec![danbooru::search::Score::Min(50)]); // score:>=25
 
+    // build "url" search query
     let mut query = danbooru::Query::posts(&builder.build());
     query.limit(3);
 
-    let url = client.compose(danbooru::Endpoint::Posts, query).unwrap();
+    let url = client.compose(danbooru::Endpoint::Posts, query)?;
     let posts = client
         .fetch::<danbooru::response::Posts>(url, Method::GET)
-        .await
-        .unwrap();
+        .await?;
 
     assert_eq!(posts.len(), 3);
 
@@ -60,6 +61,7 @@ async fn main() -> Result<()> {
 
         let url = post.preview_file_url;
 
+        // to avoid blocking by cloudflare, use the client instead of empty reqwest
         let res = client.fetch_raw(Url::from_str(&url)?, Method::GET).await?;
         assert!(res.status().is_success());
         let bytes = res.bytes().await?;
