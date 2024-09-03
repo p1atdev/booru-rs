@@ -39,9 +39,9 @@ pub struct Post {
     // url
     pub has_large: bool,
     pub media_asset: MediaAsset,
-    pub file_url: String,
-    pub large_file_url: String,
-    pub preview_file_url: String,
+    pub file_url: Option<String>, // missing if posts are banned
+    pub large_file_url: Option<String>,
+    pub preview_file_url: Option<String>,
 
     // relation
     pub parent_id: Option<i64>,
@@ -57,7 +57,7 @@ pub struct Post {
     // file
     pub file_size: i64,
     pub file_ext: FileExt,
-    pub md5: String,
+    pub md5: Option<String>,
 
     // user
     pub uploader_id: i64,
@@ -77,17 +77,17 @@ pub struct MediaAsset {
     pub id: i64,
     pub created_at: String,
     pub updated_at: String,
-    pub md5: String,
+    pub md5: Option<String>,
     pub file_ext: FileExt,
     pub file_size: i64,
     pub image_width: i64,
     pub image_height: i64,
     pub duration: Option<f32>,
     pub status: String,
-    pub file_key: String,
+    pub file_key: Option<String>,
     pub is_public: bool,
     pub pixel_hash: String,
-    pub variants: Vec<Variant>,
+    pub variants: Option<Vec<Variant>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

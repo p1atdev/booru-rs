@@ -33,7 +33,6 @@ async fn main() -> Result<()> {
 
     // search "tags" builder
     let mut builder = danbooru::SearchTagsBuilder::new();
-    builder.add_tag("2girls");
     builder.add_tag("cat_ears");
     builder.ratings(vec![danbooru::Rating::General]);
     let filetypes = vec![
@@ -42,7 +41,8 @@ async fn main() -> Result<()> {
         danbooru::FileExt::Webp,
     ];
     builder.filetypes(filetypes.clone());
-    builder.scores(vec![danbooru::search::Score::Min(50)]); // score:>=25
+    builder.scores(vec![danbooru::search::Score::Min(50)]); // score:>=50
+    builder.order(danbooru::search::Order::Random);
 
     // build "url" search query
     let mut query = danbooru::Query::posts(&builder.build());
@@ -57,9 +57,9 @@ async fn main() -> Result<()> {
 
     for post in posts {
         println!("id: {}, updated_at: {}", post.id, post.updated_at);
-        println!("small_url: {}", post.preview_file_url);
 
-        let url = post.preview_file_url;
+        let url = post.preview_file_url.unwrap();
+        println!("small_url: {}", url);
 
         // to avoid blocking by cloudflare, use the client instead of empty reqwest
         let res = client.fetch_raw(Url::from_str(&url)?, Method::GET).await?;
