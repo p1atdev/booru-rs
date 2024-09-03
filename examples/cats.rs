@@ -3,7 +3,6 @@ use booru::board::danbooru;
 use booru::board::{BoardQuery, BoardSearchTagsBuilder};
 use booru::client::{Auth, Client};
 use dotenv::dotenv;
-use image::{DynamicImage, ImageBuffer};
 use imgcatr::ops;
 use reqwest::{Method, Url};
 use std::env;
