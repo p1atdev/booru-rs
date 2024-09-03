@@ -1,14 +1,11 @@
-use std::collections::HashMap;
-
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine};
 use reqwest::{
     header::{self, HeaderMap, HeaderValue},
     Method, RequestBuilder, Response, Url, Version,
 };
-use serde::Serialize;
 
-use crate::board::{Board, BoardEndpoint, BoardQuery};
+use crate::board::{Board, BoardEndpoint, BoardQuery, BoardResponse};
 
 /// Auth struct
 #[derive(Debug, Clone)]
@@ -89,15 +86,23 @@ impl Client {
     }
 
     /// create request builder
-    fn request_builder(&self, method: Method, url: Url) -> RequestBuilder {
+    pub fn request_builder(&self, method: Method, url: Url) -> RequestBuilder {
         let builder = self.client.request(method, url).version(Version::HTTP_3);
         builder
     }
 
-    /// Get request
-    pub async fn get(&self, url: Url) -> Result<Response> {
-        let builder = self.request_builder(Method::GET, url);
+    /// Send get request and return response
+    pub async fn fetch_raw(&self, url: Url, method: Method) -> Result<Response> {
+        let builder = self.request_builder(method, url);
         let res = builder.send().await?;
+        Ok(res)
+    }
+
+    /// Send get request and return response as specified type
+    pub async fn fetch<T: BoardResponse>(&self, url: Url, method: Method) -> Result<T> {
+        let res = self.fetch_raw(url, method).await?;
+        let text = res.text().await?;
+        let res = T::from_str(&text)?;
         Ok(res)
     }
 }
@@ -106,7 +111,7 @@ impl Client {
 mod tests {
     use super::*;
 
-    use crate::board::{danbooru, safebooru, BoardResponse, BoardSearchTagsBuilder};
+    use crate::board::{danbooru, safebooru, BoardSearchTagsBuilder};
     use crate::test_utils::Env;
 
     #[test]
@@ -141,7 +146,7 @@ mod tests {
         query.limit(3);
 
         let url = client.compose(danbooru::Endpoint::Posts, query).unwrap();
-        let res = client.get(url).await.unwrap();
+        let res = client.fetch_raw(url, Method::GET).await.unwrap();
 
         assert!(res.status().is_success());
 
@@ -168,7 +173,7 @@ mod tests {
         query.limit(3);
 
         let url = client.compose(danbooru::Endpoint::Posts, query).unwrap();
-        let res = client.get(url).await.unwrap();
+        let res = client.fetch_raw(url, Method::GET).await.unwrap();
 
         assert!(res.status().is_success());
 
@@ -196,11 +201,11 @@ mod tests {
         query.limit(10);
 
         let url = client.compose(safebooru::Endpoint::Posts, query).unwrap();
-        let res = client.get(url).await.unwrap();
+        let posts = client
+            .fetch::<safebooru::response::Posts>(url, Method::GET)
+            .await
+            .unwrap();
 
-        assert!(res.status().is_success());
-
-        let posts = safebooru::response::Posts::from_str(&res.text().await.unwrap()).unwrap();
         assert_eq!(posts.len(), 10);
     }
 }

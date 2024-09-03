@@ -1,8 +1,8 @@
-use anyhow::Result;
-use std::collections::HashMap;
-
 pub mod danbooru;
 pub mod safebooru;
+
+use anyhow::Result;
+use std::collections::HashMap;
 
 /// Supported WebSite enum
 #[derive(Debug, Clone)]
