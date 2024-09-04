@@ -93,19 +93,11 @@ pub struct MediaAsset {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Variant {
     #[serde(rename = "type")]
-    pub variant_type: VariantType,
+    pub variant_type: String,
     pub url: String,
     pub width: i64,
     pub height: i64,
     pub file_ext: FileExt,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum VariantType {
-    Sample,
-    Original,
-    #[serde(other)]
-    WxH,
 }
 
 impl BoardResponse for Post {
