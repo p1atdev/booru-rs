@@ -7,13 +7,15 @@ use booru::board::{danbooru, BoardQuery, BoardSearchTagsBuilder};
 use booru::client::{Auth, Client};
 use clap::Parser;
 use futures::stream::{self, StreamExt};
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::{Method, Url};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
+
+const PBAR_TEMPLATE: &str = "[{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} {msg}";
 
 pub struct Env {
     pub username: String,
@@ -59,7 +61,12 @@ fn compose_url(client: &Client, query: Query) -> Result<Url> {
     Ok(client.compose(Endpoint::Posts, query)?)
 }
 
-fn output_file_path<P: AsRef<Path>>(base_dir: P, prefix: &str, year: &u16, month: &u8) -> String {
+fn get_output_file_path<P: AsRef<Path>>(
+    base_dir: P,
+    prefix: &str,
+    year: &u16,
+    month: &u8,
+) -> String {
     base_dir
         .as_ref()
         .join(format!("{}-{}-{:02}.jsonl", prefix, year, month))
@@ -84,6 +91,7 @@ async fn main() -> Result<()> {
     let output_dir = args.output.output_path;
     let output_prefix = args.output.prefix.unwrap_or(args.domain.to_string());
     let write_concurrency = args.output.write_concurrency;
+    let overwrite = args.output.overwrite;
 
     // if output dir does not exist, create it
     tokio::fs::create_dir_all(&output_dir).await?;
@@ -92,16 +100,26 @@ async fn main() -> Result<()> {
         for month in month_start..=month_end {
             let query = build_query(&year, &month, &args.tags);
 
+            let output_file_path = get_output_file_path(&output_dir, &output_prefix, &year, &month);
+            if tokio::fs::metadata(&output_file_path).await.is_ok() && !overwrite {
+                eprintln!("File {} already exists, skipping", output_file_path);
+                continue;
+            }
+
+            // create output file reference
             let output_file = OpenOptions::new()
                 .append(true)
                 .create(true)
-                .open(output_file_path(&output_dir, &output_prefix, &year, &month))
+                .open(output_file_path)
                 .await
                 .expect("Failed to open file");
             let shared_output_file = Arc::new(Mutex::new(output_file));
             let mut tasks = vec![];
 
+            // start crawling
             let bar = ProgressBar::new(1000);
+            bar.set_style(ProgressStyle::with_template(PBAR_TEMPLATE)?);
+            bar.set_message(format!("{}-{:02}", year, month));
             let mut page = 1;
             loop {
                 let mut query = query.clone();
@@ -133,6 +151,7 @@ async fn main() -> Result<()> {
             }
             bar.finish();
 
+            // wait for all writing tasks to finish
             stream::iter(tasks)
                 .buffer_unordered(write_concurrency)
                 .collect::<Vec<_>>()
