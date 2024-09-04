@@ -142,4 +142,12 @@ mod tests {
         query.insert("limit", 3);
         assert_eq!(query.to_string(), "tags=1girl&limit=3");
     }
+
+    #[test]
+    fn test_query_trait() {
+        let mut query = Query::posts("1girl");
+        query.limit(3);
+        query.page(2);
+        assert_eq!(query.to_string(), "tags=1girl&limit=3&page=2");
+    }
 }

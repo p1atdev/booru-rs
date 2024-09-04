@@ -44,6 +44,11 @@ pub trait BoardQuery {
     fn limit(&mut self, limit: i64) {
         self.insert("limit", limit);
     }
+
+    /// insert "page" query parameter
+    fn page(&mut self, page: i64) {
+        self.insert("page", page);
+    }
 }
 
 /// search tags builder
