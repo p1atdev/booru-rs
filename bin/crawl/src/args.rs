@@ -68,4 +68,7 @@ pub struct Output {
 
     #[arg(long, default_value_t = 4)]
     pub write_concurrency: usize,
+
+    #[arg(long)]
+    pub overwrite: bool,
 }
