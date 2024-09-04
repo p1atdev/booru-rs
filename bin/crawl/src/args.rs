@@ -12,6 +12,9 @@ pub struct Cli {
 
     #[command(flatten)]
     pub date: Date,
+
+    #[command(flatten)]
+    pub output: Output,
 }
 
 #[derive(Parser, Debug, ValueEnum, Clone)]
@@ -29,6 +32,16 @@ impl Domain {
     }
 }
 
+impl ToString for Domain {
+    fn to_string(&self) -> String {
+        match self {
+            Domain::Danbooru => "danbooru",
+            Domain::Safebooru => "safebooru",
+        }
+        .to_string()
+    }
+}
+
 #[derive(Args, Debug, Clone)]
 pub struct Date {
     #[arg(long, default_value_t = 2024)]
@@ -42,4 +55,17 @@ pub struct Date {
 
     #[arg(long)]
     pub month_end: Option<u8>,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct Output {
+    /// Output folder path
+    #[arg(short, long, default_value = "output")]
+    pub output_path: String,
+
+    #[arg(short, long)]
+    pub prefix: Option<String>,
+
+    #[arg(long, default_value_t = 4)]
+    pub write_concurrency: usize,
 }

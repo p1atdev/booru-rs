@@ -6,7 +6,14 @@ use booru::board::danbooru::{response, search, Endpoint, FileExt, Query};
 use booru::board::{danbooru, BoardQuery, BoardSearchTagsBuilder};
 use booru::client::{Auth, Client};
 use clap::Parser;
-use reqwest::Url;
+use futures::stream::{self, StreamExt};
+use indicatif::ProgressBar;
+use reqwest::{Method, Url};
+use std::path::Path;
+use std::sync::Arc;
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncWriteExt;
+use tokio::sync::Mutex;
 
 pub struct Env {
     pub username: String,
@@ -32,7 +39,7 @@ fn build_query(year: &u16, month: &u8, tags: &str) -> Query {
 
     let mut builder = danbooru::SearchTagsBuilder::new();
     builder.add_tag(tags);
-    builder.add_tag("-is:banned");
+    // builder.add_tag("-is:banned");
     builder.filetypes(vec![FileExt::Png, FileExt::Jpg, FileExt::Webp]);
 
     builder.dates(vec![search::Date::InEx {
@@ -52,6 +59,14 @@ fn compose_url(client: &Client, query: Query) -> Result<Url> {
     Ok(client.compose(Endpoint::Posts, query)?)
 }
 
+fn output_file_path<P: AsRef<Path>>(base_dir: P, prefix: &str, year: &u16, month: &u8) -> String {
+    base_dir
+        .as_ref()
+        .join(format!("{}-{}-{:02}.jsonl", prefix, year, month))
+        .to_string_lossy()
+        .to_string()
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Cli::parse();
@@ -63,17 +78,67 @@ async fn main() -> Result<()> {
 
     let year_start = args.date.year_start;
     let month_start = args.date.month_start;
-    // let year_end = args.date.year_end;
-    // let month_end = args.date.month_end;
+    let year_end = args.date.year_end.unwrap_or(year_start);
+    let month_end = args.date.month_end.unwrap_or(month_start);
 
-    let query = build_query(&year_start, &month_start, &args.tags);
+    let output_dir = args.output.output_path;
+    let output_prefix = args.output.prefix.unwrap_or(args.domain.to_string());
+    let write_concurrency = args.output.write_concurrency;
 
-    let url = compose_url(&client, query)?;
-    let posts = client
-        .fetch::<response::Posts>(url, reqwest::Method::GET)
-        .await?;
+    // if output dir does not exist, create it
+    tokio::fs::create_dir_all(&output_dir).await?;
 
-    println!("posts: {:?}", posts.len());
+    for year in year_start..=year_end {
+        for month in month_start..=month_end {
+            let query = build_query(&year, &month, &args.tags);
+
+            let output_file = OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(output_file_path(&output_dir, &output_prefix, &year, &month))
+                .await
+                .expect("Failed to open file");
+            let shared_output_file = Arc::new(Mutex::new(output_file));
+            let mut tasks = vec![];
+
+            let bar = ProgressBar::new(1000);
+            let mut page = 1;
+            loop {
+                let mut query = query.clone();
+                query.page(page);
+
+                let url = compose_url(&client, query)?;
+                let posts = client.fetch::<response::Posts>(url, Method::GET).await?;
+
+                if posts.is_empty() {
+                    break;
+                }
+
+                // write out
+                let cloned_output_file = Arc::clone(&shared_output_file);
+
+                let task = tokio::spawn(async move {
+                    let mut file = cloned_output_file.lock().await;
+                    for post in posts {
+                        // write post as inline json with newline
+                        let post_str = serde_json::to_string(&post).unwrap();
+                        file.write_all(post_str.as_bytes()).await.unwrap();
+                        file.write_all(b"\n").await.unwrap();
+                    }
+                });
+                tasks.push(task);
+
+                page += 1;
+                bar.inc(1);
+            }
+            bar.finish();
+
+            stream::iter(tasks)
+                .buffer_unordered(write_concurrency)
+                .collect::<Vec<_>>()
+                .await;
+        }
+    }
 
     Ok(())
 }
