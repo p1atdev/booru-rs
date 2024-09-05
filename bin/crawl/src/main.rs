@@ -108,8 +108,9 @@ async fn main() -> Result<()> {
 
             // create output file reference
             let output_file = OpenOptions::new()
-                .append(true)
+                .write(true)
                 .create(true)
+                .truncate(true)
                 .open(output_file_path)
                 .await
                 .expect("Failed to open file");
