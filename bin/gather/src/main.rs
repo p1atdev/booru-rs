@@ -1,8 +1,8 @@
 mod args;
 mod cache;
 
-use anyhow::Result;
-use args::Cli;
+use anyhow::{bail, Result};
+use args::{Cli, Optimization};
 use booru::board::danbooru::{response, search, Endpoint, FileExt, Query};
 use booru::board::{danbooru, BoardQuery, BoardSearchTagsBuilder};
 use booru::client::{Auth, Client};
@@ -10,11 +10,11 @@ use clap::Parser;
 use futures::stream::{self, StreamExt};
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::{Method, Url};
-// use std::ops::Deref;
+use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
-// use webp::Encoder;
+use webp::Encoder;
 
 const PBAR_TEMPLATE: &str = "[{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} {msg}";
 
@@ -98,15 +98,17 @@ async fn main() -> Result<()> {
     let score_min = args.condition.score_min;
     let score_max = args.condition.score_max;
 
-    let output_dir = args.output.output_path;
+    let output_dir = Arc::new(args.output.output_path);
+    let connections = args.output.connections;
     let threads = args.output.threads;
     // let overwrite = args.output.overwrite;
     let num_posts = args.output.num_posts;
+    let optim = Arc::new(args.output.optim);
 
     // let cache_dir = &args.cache.cache_path;
     // let cache_lifetime = &args.cache.lifetime();
 
-    tokio::fs::create_dir_all(&output_dir).await?;
+    tokio::fs::create_dir_all(&output_dir.clone().as_ref()).await?;
 
     let query = build_query(&tags, score_min, score_max);
 
@@ -135,110 +137,91 @@ async fn main() -> Result<()> {
             .take(rest_posts as usize)
             .collect::<Vec<_>>();
 
-        let mut donwload_tasks = vec![];
+        // firstly download images
+        stream::iter(required_posts.clone())
+            .map(|post| {
+                let file_url = post.file_url.unwrap();
+                let cloned_client = client.clone();
 
-        for post in required_posts.clone() {
-            let file_url = post.file_url.unwrap();
-            let cloned_bar = Arc::clone(&shared_bar);
-            let cloned_client = client.clone();
+                tokio::spawn(async move {
+                    // donwload the image
+                    let res = cloned_client
+                        .fetch_raw(Url::parse(&file_url)?, Method::GET)
+                        .await?;
+                    let bytes = res.bytes().await?;
+                    Result::<_>::Ok(bytes)
+                })
+            })
+            .buffer_unordered(connections)
+            .map(|bytes| bytes?)
+            // then convert to webp
+            .map(|bytes| match optim.clone().as_ref() {
+                Optimization::None => {
+                    return tokio::task::spawn_blocking(move || {
+                        let bytes = bytes?;
+                        let bytes = bytes.deref().to_vec();
+                        Result::<_>::Ok(bytes)
+                    });
+                }
+                Optimization::Webp => tokio::task::spawn_blocking(move || {
+                    let bytes = bytes?;
+                    let img = image::load_from_memory(&bytes)?;
 
-            // TODO: customizable extension
-            let image_path = get_image_path(&output_dir, &post.id, "webp")?;
+                    let encoder = match Encoder::from_image(&img) {
+                        Ok(encoder) => encoder,
+                        Err(e) => bail!("Failed to encode image: {}", e),
+                    };
 
-            // let tag_path = get_tag_path(&output_dir, &post.id);
+                    let bytes = encoder.encode_lossless().deref().to_vec();
+                    Result::<_>::Ok(bytes)
+                }),
+            })
+            .buffer_unordered(threads)
+            .map(|bytes| bytes?)
+            // finally write to disk
+            .zip(stream::iter(required_posts.clone()))
+            .map(|(bytes, post)| {
+                let cloned_bar = Arc::clone(&shared_bar);
+                let cloned_output_dir = output_dir.clone();
+                let cloned_optim = optim.clone();
 
-            let task = tokio::spawn(async move {
-                // donwload the image
-                let res = cloned_client
-                    .fetch_raw(Url::parse(&file_url).unwrap(), Method::GET)
-                    .await
-                    .unwrap();
+                tokio::spawn(async move {
+                    let bytes = bytes?;
 
-                let bytes = res.bytes().await.unwrap();
-                // let img = image::load_from_memory(bytes.as_ref()).unwrap();
-                // img
-                // // convert to compressed webp
-                // let webp = tokio::task::block_in_place(move || {
-                //     let encoder = Encoder::from_image(&img).unwrap();
-                //     encoder.encode_lossless().deref().to_vec()
-                // });
+                    let url = Url::parse(&post.file_url.unwrap())?;
+                    let file_ext = match cloned_optim.as_ref() {
+                        Optimization::None => {
+                            let path = url.path();
+                            let file_ext = path.split('.').last().unwrap();
+                            file_ext
+                        }
+                        Optimization::Webp => "webp",
+                    };
 
-                let mut image_file = tokio::fs::OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(true)
-                    .open(image_path)
-                    .await
-                    .expect("Failed to open file");
+                    let image_path =
+                        get_image_path(&cloned_output_dir.as_ref(), &post.id, file_ext)?;
 
-                // // write
-                // image_file.write_all(&*webp).await.unwrap();
-                image_file.write_all(bytes.as_ref()).await.unwrap();
+                    let mut image_file = tokio::fs::OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(image_path)
+                        .await
+                        .expect("Failed to open file");
 
-                // TODO: write tags
+                    // write the image
+                    image_file.write_all(bytes.as_ref()).await.unwrap();
 
-                cloned_bar.lock().await.inc(1);
-            });
-            donwload_tasks.push(task);
-        }
+                    // TODO: write tags
 
-        stream::iter(donwload_tasks)
+                    cloned_bar.lock().await.inc(1);
+
+                    Result::<_>::Ok(())
+                })
+            })
             .buffer_unordered(threads)
             .collect::<Vec<_>>()
             .await;
-
-        // stream::iter(required_posts.clone())
-        //     .map(|post| {
-        //         let file_url = post.file_url.unwrap();
-        //         let cloned_client = client.clone();
-
-        //         tokio::spawn(async move {
-        //             // donwload the image
-        //             let res = cloned_client
-        //                 .fetch_raw(Url::parse(&file_url).unwrap(), Method::GET)
-        //                 .await
-        //                 .unwrap();
-
-        //             let bytes = res.bytes().await.unwrap();
-        //             let img = image::load_from_memory(bytes.as_ref()).unwrap();
-        //             img
-        //         })
-        //     })
-        //     .buffer_unordered(threads)
-        //     .map(|img| img.unwrap())
-        //     .map(|img| {
-        //         // convert to compressed webp
-        //         tokio::task::spawn_blocking(move || {
-        //             let encoder = Encoder::from_image(&img).unwrap();
-        //             encoder.encode_lossless().deref().to_vec()
-        //         })
-        //     })
-        //     .buffer_unordered(threads)
-        //     .map(|webp| webp.unwrap())
-        //     .zip(stream::iter(required_posts.clone()))
-        //     .map(|(webp, post)| {
-        //         // TODO: customizable extension
-        //         let image_path = get_image_path(&output_dir, &post.id, "webp").unwrap();
-        //         let cloned_bar = Arc::clone(&shared_bar);
-
-        //         // write
-        //         tokio::spawn(async move {
-        //             let mut image_file = tokio::fs::OpenOptions::new()
-        //                 .write(true)
-        //                 .create(true)
-        //                 .truncate(true)
-        //                 .open(image_path.clone())
-        //                 .await
-        //                 .expect("Failed to open file");
-
-        //             image_file.write_all(&*webp).await.unwrap();
-
-        //             cloned_bar.lock().await.inc(1);
-        //         })
-        //     })
-        //     .buffer_unordered(threads)
-        //     .collect::<Vec<_>>()
-        //     .await;
 
         if shared_bar.clone().lock().await.position() as u32 >= num_posts {
             break;

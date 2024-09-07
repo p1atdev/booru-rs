@@ -8,8 +8,10 @@ pub struct Cli {
     #[arg(short, long, default_value = "danbooru")]
     pub domain: Domain,
 
+    /// Tags to search
     pub tags: String,
 
+    /// Output directory
     #[command(flatten)]
     pub output: Output,
 
@@ -51,21 +53,33 @@ pub struct Output {
     #[arg(short, long, default_value = "output")]
     pub output_path: String,
 
-    #[arg(long, default_value_t = 4)]
+    /// How many connections to download images
+    #[arg(short, long, default_value_t = 4)]
+    pub connections: usize,
+
+    /// How many threads to compress images and write to disk
+    #[arg(short, long, default_value_t = 16)]
     pub threads: usize,
 
+    /// Overwrite existing files
     #[arg(long)]
     pub overwrite: bool,
 
+    /// How many posts to download
     #[arg(short, long, default_value_t = 20)]
     pub num_posts: u32,
 
+    /// Tag template
     #[arg(
         short,
         long,
         default_value = "{people}, {character}, {copyright}, {general}, {meta}, {artist}"
     )]
     pub tag_template: String,
+
+    /// Optimization
+    #[arg(long, default_value = "none")]
+    pub optim: Optimization,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -75,6 +89,14 @@ pub struct Condition {
 
     #[arg(long, default_value = None)]
     pub score_max: Option<i32>,
+}
+
+#[derive(ValueEnum, Debug, Clone)]
+pub enum Optimization {
+    /// do not compress images. fastest. default
+    None,
+    /// save as webp. slow but small file size
+    Webp,
 }
 
 #[derive(Args, Debug, Clone)]
