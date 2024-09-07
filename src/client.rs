@@ -1,11 +1,11 @@
+use crate::board::{Board, BoardEndpoint, BoardQuery, BoardResponse};
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine};
 use reqwest::{
     header::{self, HeaderMap, HeaderValue},
     Method, RequestBuilder, Response, Url, Version,
 };
-
-use crate::board::{Board, BoardEndpoint, BoardQuery, BoardResponse};
+use std::sync::Arc;
 
 /// Auth struct
 #[derive(Debug, Clone)]
@@ -35,7 +35,7 @@ impl Auth {
 /// Danbooru API Client
 #[derive(Debug, Clone)]
 pub struct Client {
-    client: reqwest::Client,
+    client: Arc<reqwest::Client>,
     pub board: Board,
 }
 
@@ -53,12 +53,15 @@ impl Client {
 
         // get client builder and gen client
         let client_builder = reqwest::Client::builder()
-            .http3_prior_knowledge() // enable http3
-            .default_headers(headers);
+            .default_headers(headers)
+            .http2_prior_knowledge(); // http3 does not work well...
 
         let client = client_builder.build()?;
 
-        Ok(Client { client, board })
+        Ok(Client {
+            client: Arc::new(client),
+            board,
+        })
     }
 
     /// Create a new Danbooru Client
@@ -87,7 +90,11 @@ impl Client {
 
     /// create request builder
     pub fn request_builder(&self, method: Method, url: Url) -> RequestBuilder {
-        let builder = self.client.request(method, url).version(Version::HTTP_3);
+        let builder = self
+            .client
+            .clone()
+            .request(method, url)
+            .version(Version::HTTP_2);
         builder
     }
 
