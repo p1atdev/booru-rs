@@ -34,7 +34,7 @@ imgcatr = { version = "0.1.4", optional = true }
 dotenv = "0.15.0"
 
 [workspace]
-members = ["bin/crawl"]
+members = ["bin/crawl", "bin/gather"]
 
 [[example]]
 name = "cats"
