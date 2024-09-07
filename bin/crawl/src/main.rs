@@ -42,7 +42,7 @@ fn build_query(year: &u16, month: &u8, tags: &str) -> Query {
     let mut builder = danbooru::SearchTagsBuilder::new();
     builder.add_tag(tags);
     // builder.add_tag("-is:banned");
-    builder.filetypes(vec![FileExt::Png, FileExt::Jpg, FileExt::Webp]);
+    // builder.filetypes(vec![FileExt::Png, FileExt::Jpg, FileExt::Webp]);
 
     builder.dates(vec![search::Date::InEx {
         min: format!("{}-{}-01", year, month),

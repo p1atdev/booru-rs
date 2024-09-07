@@ -47,6 +47,7 @@ pub enum FileExt {
     Mp4,
     Gif,
     Avif,
+    Swf,
 }
 
 impl ToString for FileExt {
@@ -60,6 +61,7 @@ impl ToString for FileExt {
             FileExt::Mp4 => "mp4".to_string(),
             FileExt::Gif => "gif".to_string(),
             FileExt::Avif => "avif".to_string(),
+            FileExt::Swf => "swf".to_string(),
         }
     }
 }
