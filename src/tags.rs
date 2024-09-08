@@ -31,6 +31,38 @@ pub trait TagMatcher {
     fn any_in(&self, text: &str) -> bool {
         self.tags().iter().any(|t| text.contains(t))
     }
+
+    /// classify tags into two groups: matched and unmatched
+    fn classify_has(&self, tags: Vec<String>) -> (Vec<String>, Vec<String>) {
+        let mut matched = vec![];
+        let mut unmatched = vec![];
+
+        for tag in tags {
+            if self.has(&tag) {
+                matched.push(tag);
+            } else {
+                unmatched.push(tag);
+            }
+        }
+
+        (matched, unmatched)
+    }
+
+    /// classify tags into two groups: matched and unmatched
+    fn classify_any_in(&self, tags: Vec<String>) -> (Vec<String>, Vec<String>) {
+        let mut matched = vec![];
+        let mut unmatched = vec![];
+
+        for tag in tags {
+            if self.any_in(&tag) {
+                matched.push(tag);
+            } else {
+                unmatched.push(tag);
+            }
+        }
+
+        (matched, unmatched)
+    }
 }
 
 /// TagNormalizer trait
@@ -40,7 +72,15 @@ pub trait TagNormalizer {
         Self: Sized;
 
     /// normalize a tag
-    fn normalize(&self, text: &str) -> String;
+    fn normalize_text(&self, text: &str) -> String;
+
+    /// normalize tags
+    fn normalize(&self, tags: Vec<String>) -> Vec<String> {
+        tags.into_iter()
+            .filter(|t| !t.trim().is_empty())
+            .map(|t| self.normalize_text(&t))
+            .collect::<Vec<_>>()
+    }
 }
 
 /// place tags with commas instead of spaces

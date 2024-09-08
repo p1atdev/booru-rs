@@ -126,7 +126,7 @@ impl TagNormalizer for Normalizer {
         }
     }
 
-    fn normalize(&self, text: &str) -> String {
+    fn normalize_text(&self, text: &str) -> String {
         let tags = split_whitespaces(text);
         tags.into_iter()
             .map(|t| {
@@ -176,12 +176,16 @@ mod test {
     #[test]
     fn test_normalizer() {
         let normalizer = Normalizer::new();
-        assert_eq!(normalizer.normalize("1girl"), "1girl");
-        assert_eq!(normalizer.normalize("cat_ears"), "cat ears");
-
+        assert_eq!(normalizer.normalize_text("1girl"), "1girl");
+        assert_eq!(normalizer.normalize_text("cat_ears"), "cat ears");
         assert_eq!(
-            normalizer
-                .normalize("1girl cat_ears     upper_body   looking_at_viewer  >_< <|>_<|> :3"),
+            normalizer.normalize(vec!["1girl".to_string(), "cat_ears".to_string()]),
+            vec!["1girl".to_string(), "cat ears".to_string()]
+        );
+        assert_eq!(
+            normalizer.normalize_text(
+                "1girl cat_ears     upper_body   looking_at_viewer  >_< <|>_<|> :3"
+            ),
             "1girl, cat ears, upper body, looking at viewer, >_<, <|>_<|>, :3"
         );
     }

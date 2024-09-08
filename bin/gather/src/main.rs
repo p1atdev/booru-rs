@@ -1,11 +1,12 @@
 mod args;
-mod cache;
+mod utils;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use args::{Cli, Optimization};
 use booru::board::danbooru::{response, search, Endpoint, FileExt, Query};
 use booru::board::{danbooru, BoardQuery, BoardSearchTagsBuilder};
 use booru::client::{Auth, Client};
+use booru::tags::TagNormalizer;
 use clap::Parser;
 use futures::stream::{self, StreamExt};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -74,7 +75,6 @@ fn get_image_path<P: AsRef<Path>>(base_dir: P, id: &i64, extension: &str) -> Res
     Ok(path)
 }
 
-#[allow(dead_code)]
 fn get_tag_path<P: AsRef<Path>>(base_dir: P, id: &i64) -> String {
     base_dir
         .as_ref()
@@ -82,6 +82,25 @@ fn get_tag_path<P: AsRef<Path>>(base_dir: P, id: &i64) -> String {
         .to_string_lossy()
         .to_string()
 }
+
+fn get_image_file_ext(optim: &Optimization, url: String) -> Result<String> {
+    match optim {
+        Optimization::None => {
+            let url = Url::parse(&url)?;
+            let path = url.path();
+            let file_ext = path
+                .split('.')
+                .last()
+                .context("Failed to get file extension")?;
+            Ok(file_ext.to_string())
+        }
+        Optimization::Webp => Ok("webp".to_string()),
+    }
+}
+
+// fn format_tag_text(template: &str, tags: Vec<String>) -> String {
+//     tags.join(" ")
+// }
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -101,7 +120,7 @@ async fn main() -> Result<()> {
     let output_dir = Arc::new(args.output.output_path);
     let connections = args.output.connections;
     let threads = args.output.threads;
-    // let overwrite = args.output.overwrite;
+    let overwrite = args.output.overwrite;
     let num_posts = args.output.num_posts;
     let optim = Arc::new(args.output.optim);
 
@@ -116,6 +135,8 @@ async fn main() -> Result<()> {
     bar.set_style(ProgressStyle::with_template(PBAR_TEMPLATE)?);
     bar.set_message(format!("{}, page: 1", &tags));
     let shared_bar = Arc::new(tokio::sync::Mutex::new(bar));
+
+    let normalizer = Arc::new(danbooru::tags::Normalizer::new());
 
     let mut page = 1;
     loop {
@@ -133,7 +154,29 @@ async fn main() -> Result<()> {
         let rest_posts = num_posts - shared_bar.clone().lock().await.position() as u32;
         let required_posts = &posts
             .into_iter()
-            .filter(|post| post.file_url.is_some())
+            .filter(|post| {
+                if post.file_url.is_none() {
+                    return false;
+                }
+                if overwrite {
+                    // if overwrite is enabled, download all images
+                    return true;
+                }
+
+                // don't overwrite existing files~~
+
+                let ext =
+                    get_image_file_ext(optim.as_ref(), post.clone().file_url.unwrap()).unwrap();
+                let image_path = get_image_path(&output_dir.as_ref(), &post.id, &ext).unwrap();
+                let tag_path = get_tag_path(&output_dir.as_ref(), &post.id);
+
+                // if both image and tag files exist, skip
+                if Path::new(&image_path).exists() && Path::new(&tag_path).exists() {
+                    return false; // skip
+                }
+
+                return true;
+            })
             .take(rest_posts as usize)
             .collect::<Vec<_>>();
 
@@ -184,35 +227,36 @@ async fn main() -> Result<()> {
                 let cloned_bar = Arc::clone(&shared_bar);
                 let cloned_output_dir = output_dir.clone();
                 let cloned_optim = optim.clone();
+                let cloned_normalizer = normalizer.clone();
 
                 tokio::spawn(async move {
                     let bytes = bytes?;
 
-                    let url = Url::parse(&post.file_url.unwrap())?;
-                    let file_ext = match cloned_optim.as_ref() {
-                        Optimization::None => {
-                            let path = url.path();
-                            let file_ext = path.split('.').last().unwrap();
-                            file_ext
-                        }
-                        Optimization::Webp => "webp",
-                    };
-
+                    let file_ext =
+                        get_image_file_ext(&cloned_optim.as_ref(), post.file_url.unwrap())?;
                     let image_path =
-                        get_image_path(&cloned_output_dir.as_ref(), &post.id, file_ext)?;
+                        get_image_path(&cloned_output_dir.as_ref(), &post.id, &file_ext)?;
+                    let tag_path = get_tag_path(&cloned_output_dir.as_ref(), &post.id);
 
+                    // write the image
                     let mut image_file = tokio::fs::OpenOptions::new()
                         .write(true)
                         .create(true)
                         .truncate(true)
                         .open(image_path)
                         .await
-                        .expect("Failed to open file");
+                        .expect("Failed to open image file");
+                    image_file.write_all(bytes.as_ref()).await?;
 
-                    // write the image
-                    image_file.write_all(bytes.as_ref()).await.unwrap();
-
-                    // TODO: write tags
+                    // write tags
+                    let tag_file = tokio::fs::OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(tag_path)
+                        .await
+                        .expect("Failed to open tag text file");
+                    // tag_file.write_all();
 
                     cloned_bar.lock().await.inc(1);
 

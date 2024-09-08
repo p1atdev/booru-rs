@@ -26,12 +26,15 @@ reqwest = { version = "0.12.7", features = [
 serde = { version = "1.0.208", features = ["derive"] }
 serde_json = "1.0.125"
 tokio = { version = "1.39.3", features = ["full"] }
+regex = "1.10.6"
 
 image = { version = "0.24.9", optional = true }
 imgcatr = { version = "0.1.4", optional = true }
 
 [dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
 dotenv = "0.15.0"
+rand = "0.8.5"
 
 [workspace]
 members = ["bin/crawl", "bin/gather"]
@@ -39,3 +42,7 @@ members = ["bin/crawl", "bin/gather"]
 [[example]]
 name = "cats"
 required-features = ["cats"]
+
+[[bench]]
+name = "regex_vs_split"
+harness = false
