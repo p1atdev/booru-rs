@@ -1,5 +1,6 @@
 pub mod response;
 pub mod search;
+pub mod tags;
 
 use super::{BoardEndpoint, BoardQuery};
 use serde::{Deserialize, Serialize};
