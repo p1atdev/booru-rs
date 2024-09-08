@@ -1,9 +1,15 @@
 # gather
 
+## Installation 
+
+```bash
+cargo install --git https://github.com/p1atdev/booru-rs gather
+```
+
 ## Example usage
 
 ```bash
-cargo run --release -- "shinosawa_hiro solo" \
+gather "shinosawa_hiro solo" \
     --output-path ./output/hiro \
     --connections 4 \
     --threads 16 \

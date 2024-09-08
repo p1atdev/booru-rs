@@ -54,7 +54,12 @@ impl Client {
         // get client builder and gen client
         let client_builder = reqwest::Client::builder()
             .default_headers(headers)
-            .http2_prior_knowledge(); // http3 does not work well...
+            .http2_prior_knowledge();
+
+        #[cfg(feature = "http3")]
+        let client_builder = reqwest::Client::builder()
+            .default_headers(headers)
+            .http3_prior_knowledge();
 
         let client = client_builder.build()?;
 
@@ -90,11 +95,14 @@ impl Client {
 
     /// create request builder
     pub fn request_builder(&self, method: Method, url: Url) -> RequestBuilder {
-        let builder = self
-            .client
-            .clone()
-            .request(method, url)
-            .version(Version::HTTP_2);
+        let builder =
+            self.client
+                .clone()
+                .request(method, url)
+                .version(match cfg!(feature = "http3") {
+                    true => Version::HTTP_3,
+                    false => Version::HTTP_2,
+                });
         builder
     }
 
