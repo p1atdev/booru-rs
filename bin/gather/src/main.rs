@@ -6,7 +6,6 @@ use args::{Cli, Optimization};
 use booru::board::danbooru::{response, search, Endpoint, FileExt, Query};
 use booru::board::{danbooru, BoardQuery, BoardSearchTagsBuilder};
 use booru::client::{Auth, Client};
-use booru::tags::TagNormalizer;
 use clap::Parser;
 use futures::stream::{self, StreamExt};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -98,10 +97,6 @@ fn get_image_file_ext(optim: &Optimization, url: String) -> Result<String> {
     }
 }
 
-// fn format_tag_text(template: &str, tags: Vec<String>) -> String {
-//     tags.join(" ")
-// }
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Cli::parse();
@@ -123,6 +118,7 @@ async fn main() -> Result<()> {
     let overwrite = args.output.overwrite;
     let num_posts = args.output.num_posts;
     let optim = Arc::new(args.output.optim);
+    let tag_template = Arc::new(args.output.tag_template);
 
     // let cache_dir = &args.cache.cache_path;
     // let cache_lifetime = &args.cache.lifetime();
@@ -135,8 +131,7 @@ async fn main() -> Result<()> {
     bar.set_style(ProgressStyle::with_template(PBAR_TEMPLATE)?);
     bar.set_message(format!("{}, page: 1", &tags));
     let shared_bar = Arc::new(tokio::sync::Mutex::new(bar));
-
-    let normalizer = Arc::new(danbooru::tags::Normalizer::new());
+    let tag_manager = Arc::new(utils::TagManager::new());
 
     let mut page = 1;
     loop {
@@ -227,13 +222,14 @@ async fn main() -> Result<()> {
                 let cloned_bar = Arc::clone(&shared_bar);
                 let cloned_output_dir = output_dir.clone();
                 let cloned_optim = optim.clone();
-                let cloned_normalizer = normalizer.clone();
+                let cloned_tag_template = tag_template.clone();
+                let cloned_tag_manager = tag_manager.clone();
 
                 tokio::spawn(async move {
                     let bytes = bytes?;
 
                     let file_ext =
-                        get_image_file_ext(&cloned_optim.as_ref(), post.file_url.unwrap())?;
+                        get_image_file_ext(&cloned_optim.as_ref(), post.clone().file_url.unwrap())?;
                     let image_path =
                         get_image_path(&cloned_output_dir.as_ref(), &post.id, &file_ext)?;
                     let tag_path = get_tag_path(&cloned_output_dir.as_ref(), &post.id);
@@ -249,14 +245,15 @@ async fn main() -> Result<()> {
                     image_file.write_all(bytes.as_ref()).await?;
 
                     // write tags
-                    let tag_file = tokio::fs::OpenOptions::new()
+                    let mut tag_file = tokio::fs::OpenOptions::new()
                         .write(true)
                         .create(true)
                         .truncate(true)
                         .open(tag_path)
                         .await
                         .expect("Failed to open tag text file");
-                    // tag_file.write_all();
+                    let tag_text = cloned_tag_manager.format_template(&cloned_tag_template, &post);
+                    tag_file.write_all(tag_text.as_bytes()).await?;
 
                     cloned_bar.lock().await.inc(1);
 
