@@ -29,15 +29,17 @@ impl TagManager {
     pub fn replace_with_tags(&self, template: &str, tags: HashMap<&str, Vec<String>>) -> String {
         let mut result = template.to_string();
         for (key, value) in tags {
-            result = result.replace(key, &self.normalize(value).join(","));
+            result = result.replace(
+                key,
+                &self
+                    .normalize(value)
+                    .iter()
+                    .map(|t| t.trim())
+                    .filter(|t| !t.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
         }
-        // split and join again to remove empty tags
-        result = result
-            .split(',')
-            .map(|t| t.trim())
-            .filter(|t| !t.is_empty())
-            .collect::<Vec<_>>()
-            .join(", ");
 
         result
     }

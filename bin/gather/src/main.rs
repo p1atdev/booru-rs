@@ -178,7 +178,7 @@ async fn main() -> Result<()> {
         // firstly download images
         stream::iter(required_posts.clone())
             .map(|post| {
-                let file_url = post.file_url.unwrap();
+                let file_url = post.clone().file_url.unwrap();
                 let cloned_client = client.clone();
 
                 tokio::spawn(async move {
@@ -187,22 +187,22 @@ async fn main() -> Result<()> {
                         .fetch_raw(Url::parse(&file_url)?, Method::GET)
                         .await?;
                     let bytes = res.bytes().await?;
-                    Result::<_>::Ok(bytes)
+                    Result::<_>::Ok((bytes, post))
                 })
             })
             .buffer_unordered(connections)
-            .map(|bytes| bytes?)
+            .map(|pair| pair?)
             // then convert to webp
-            .map(|bytes| match optim.clone().as_ref() {
+            .map(|pair| match optim.clone().as_ref() {
                 Optimization::None => {
                     return tokio::task::spawn_blocking(move || {
-                        let bytes = bytes?;
+                        let (bytes, post) = pair?;
                         let bytes = bytes.deref().to_vec();
-                        Result::<_>::Ok(bytes)
+                        Result::<_>::Ok((bytes, post))
                     });
                 }
                 Optimization::Webp => tokio::task::spawn_blocking(move || {
-                    let bytes = bytes?;
+                    let (bytes, post) = pair?;
                     let img = image::load_from_memory(&bytes)?;
 
                     let encoder = match Encoder::from_image(&img) {
@@ -211,25 +211,26 @@ async fn main() -> Result<()> {
                     };
 
                     let bytes = encoder.encode_lossless().deref().to_vec();
-                    Result::<_>::Ok(bytes)
+                    Result::<_>::Ok((bytes, post))
                 }),
             })
             .buffer_unordered(threads)
-            .map(|bytes| bytes?)
+            .map(|pair| pair?)
             // finally write to disk
-            .zip(stream::iter(required_posts.clone()))
-            .map(|(bytes, post)| {
-                let cloned_bar = Arc::clone(&shared_bar);
+            .map(|pair| {
+                let cloned_bar = shared_bar.clone();
                 let cloned_output_dir = output_dir.clone();
                 let cloned_optim = optim.clone();
                 let cloned_tag_template = tag_template.clone();
                 let cloned_tag_manager = tag_manager.clone();
 
                 tokio::spawn(async move {
-                    let bytes = bytes?;
+                    let (bytes, post) = pair?;
 
-                    let file_ext =
-                        get_image_file_ext(&cloned_optim.as_ref(), post.clone().file_url.unwrap())?;
+                    let file_ext = get_image_file_ext(
+                        &cloned_optim.as_ref(),
+                        post.clone().file_url.context("file_url must not be null")?,
+                    )?;
                     let image_path =
                         get_image_path(&cloned_output_dir.as_ref(), &post.id, &file_ext)?;
                     let tag_path = get_tag_path(&cloned_output_dir.as_ref(), &post.id);
