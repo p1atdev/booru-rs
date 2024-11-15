@@ -281,7 +281,7 @@ async fn main() -> Result<()> {
     let num_connections = args.num_connections;
     let pbar = ProgressBar::new(all_tags.len() as u64)
         .with_style(ProgressStyle::default_bar().template(PBAR_TEMPLATE)?);
-    let output_file = Arc::new(tokio::sync::Mutex::new(
+    let output_file = Arc::new(tokio::sync::Mutex::new(tokio::io::BufWriter::new(
         tokio::fs::OpenOptions::new()
             .write(true)
             .create(true)
@@ -289,7 +289,7 @@ async fn main() -> Result<()> {
             .truncate(false)
             .open(&args.output)
             .await?,
-    ));
+    )));
     let not_founds = Arc::new(tokio::sync::Mutex::new(
         tokio::fs::OpenOptions::new()
             .write(true)
