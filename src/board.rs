@@ -30,6 +30,10 @@ pub trait BoardResponse {
 /// Endpoint trait
 pub trait BoardEndpoint {
     fn path(&self) -> String;
+
+    fn urlencode(&self, s: &str) -> String {
+        url::form_urlencoded::byte_serialize(s.as_bytes()).collect::<String>()
+    }
 }
 
 /// Request query

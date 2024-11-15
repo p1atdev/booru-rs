@@ -82,7 +82,7 @@ impl BoardEndpoint for Endpoint {
         match self {
             Endpoint::Posts => "/posts.json".to_string(),
             Endpoint::Post(id) => format!("/posts/{}.json", id),
-            Endpoint::WikiPages(title) => format!("/wiki_pages/{}.json", title),
+            Endpoint::WikiPages(title) => format!("/wiki_pages/{}.json", self.urlencode(title)),
         }
     }
 }
