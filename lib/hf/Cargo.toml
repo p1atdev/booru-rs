@@ -1,0 +1,9 @@
+[package]
+name = "hf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.93"
+hf-hub = { version = "0.3.2", features = ["tokio"] }
+parquet = "53.3.0"
