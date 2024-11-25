@@ -17,24 +17,6 @@ use tokio::sync::Mutex;
 
 const PBAR_TEMPLATE: &str = "[{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} {msg}";
 
-pub struct Env {
-    pub username: String,
-    pub api_key: String,
-}
-
-impl Env {
-    pub fn new() -> Self {
-        use dotenv::dotenv;
-        use std::env;
-
-        dotenv().ok();
-        Env {
-            username: env::var("DANBOORU_USERNAME").unwrap(),
-            api_key: env::var("DANBOORU_API_KEY").unwrap(),
-        }
-    }
-}
-
 fn build_query(year: &u16, month: &u8, tags: &str) -> Query {
     let next_month = (month % 12) + 1;
     let next_year = year + ((month.clone() as u16) / 12);
@@ -78,9 +60,7 @@ fn get_output_file_path<P: AsRef<Path>>(
 async fn main() -> Result<()> {
     let args = Cli::parse();
 
-    let env = Env::new();
-
-    let auth = Auth::new(&env.username, &env.api_key);
+    let auth = Auth::new(&args.username, &args.api_key);
     let client = Client::new(args.domain.board(), auth)?;
 
     let year_start = args.date.year_start;

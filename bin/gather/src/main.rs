@@ -18,24 +18,6 @@ use webp::Encoder;
 
 const PBAR_TEMPLATE: &str = "[{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} {msg}";
 
-pub struct Env {
-    pub username: String,
-    pub api_key: String,
-}
-
-impl Env {
-    pub fn new() -> Self {
-        use dotenv::dotenv;
-        use std::env;
-
-        dotenv().ok();
-        Env {
-            username: env::var("DANBOORU_USERNAME").unwrap(),
-            api_key: env::var("DANBOORU_API_KEY").unwrap(),
-        }
-    }
-}
-
 fn build_query(tags: &str, score_min: i32, score_max: Option<i32>) -> Query {
     let mut builder = danbooru::SearchTagsBuilder::new();
     builder.add_tag(tags);
@@ -103,9 +85,7 @@ async fn main() -> Result<()> {
 
     println!("{:?}", args);
 
-    let env = Env::new();
-
-    let auth = Auth::new(&env.username, &env.api_key);
+    let auth = Auth::new(&args.username, &args.api_key);
     let client = Client::new(args.domain.board(), auth)?;
 
     let tags = args.tags;
