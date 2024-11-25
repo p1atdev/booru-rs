@@ -20,7 +20,7 @@ use std::sync::{Arc, RwLock};
 use tokio::io::AsyncWriteExt;
 use tokio::time::sleep;
 
-use wiki::hf::from_hub;
+use hf::from_hub;
 
 const PBAR_TEMPLATE: &str =
     "[{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} {msg} {eta_precise}";

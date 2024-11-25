@@ -13,7 +13,7 @@ use std::io::{BufRead, BufWriter, Write};
 use std::path::PathBuf;
 use std::sync::RwLock;
 
-use wiki::hf::from_hub;
+use hf::from_hub;
 
 const PBAR_TEMPLATE: &str =
     "[{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} {msg} {eta_precise}";

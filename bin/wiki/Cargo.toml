@@ -3,7 +3,19 @@ name = "wiki"
 version = "0.1.0"
 edition = "2021"
 
+
+[[bin]]
+name = "add_category"
+path = "src/add_category.rs"
+
+[[bin]]
+name = "fetch"
+path = "src/main.rs"
+
 [dependencies]
+booru = { path = "../.." }
+hf = { path = "../../lib/hf" }
+
 anyhow = "1.0.93"
 clap = { version = "4.5.20", features = ["derive", "env"] }
 futures = "0.3.31"
@@ -16,5 +28,4 @@ hf-hub = { version = "0.3.2", features = ["tokio"] }
 parquet = "53.2.0"
 rayon = "1.10.0"
 num_cpus = "1.16.0"
-
-booru = { path = "../.." }
+thiserror = "2.0.3"
