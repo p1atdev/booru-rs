@@ -1,0 +1,31 @@
+[package]
+name = "wiki"
+version = "0.1.0"
+edition = "2021"
+
+
+[[bin]]
+name = "add_category"
+path = "src/add_category.rs"
+
+[[bin]]
+name = "fetch"
+path = "src/main.rs"
+
+[dependencies]
+booru = { path = "../.." }
+hf = { path = "../../lib/hf" }
+
+anyhow = "1.0.93"
+clap = { version = "4.5.20", features = ["derive", "env"] }
+futures = "0.3.31"
+indicatif = { version = "0.17.8", features = ["futures", "rayon"] }
+reqwest = "0.12.9"
+serde = "1.0.215"
+serde_json = "1.0.132"
+tokio = { version = "1.41.1", features = ["full"] }
+hf-hub = { version = "0.3.2", features = ["tokio"] }
+parquet = "53.2.0"
+rayon = "1.10.0"
+num_cpus = "1.16.0"
+thiserror = "2.0.3"

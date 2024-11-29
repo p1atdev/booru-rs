@@ -74,6 +74,7 @@ impl ToString for FileExt {
 pub enum Endpoint {
     Posts,
     Post(i64),
+    WikiPages(String),
 }
 
 impl BoardEndpoint for Endpoint {
@@ -81,6 +82,7 @@ impl BoardEndpoint for Endpoint {
         match self {
             Endpoint::Posts => "/posts.json".to_string(),
             Endpoint::Post(id) => format!("/posts/{}.json", id),
+            Endpoint::WikiPages(title) => format!("/wiki_pages/{}.json", self.urlencode(title)),
         }
     }
 }

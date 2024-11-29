@@ -26,6 +26,11 @@ pub struct Cli {
 
     #[arg(long, env = "DANBOORU_API_KEY", hide_env_values = true)]
     pub api_key: String,
+
+    #[arg(long, env = "DANBOORU_USERNAME", hide_env_values = true)]
+    pub username: String,
+    #[arg(long, env = "DANBOORU_API_KEY", hide_env_values = true)]
+    pub api_key: String,
 }
 
 #[derive(Parser, Debug, ValueEnum, Clone)]

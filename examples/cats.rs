@@ -2,33 +2,27 @@ use anyhow::Result;
 use booru::board::danbooru;
 use booru::board::{BoardQuery, BoardSearchTagsBuilder};
 use booru::client::{Auth, Client};
-use dotenv::dotenv;
+use clap::{Args, Parser, ValueEnum};
 use imgcatr::ops;
 use reqwest::{Method, Url};
 use std::env;
 use std::io::stdout;
 use std::str::FromStr;
 
-pub struct Env {
+#[derive(Parser, Debug, Clone)]
+#[command(version, about, long_about = None)]
+pub struct Args {
+    #[arg(long, env = "DANBOORU_USERNAME", hide_env_values = true)]
     pub username: String,
+    #[arg(long, env = "DANBOORU_API_KEY", hide_env_values = true)]
     pub api_key: String,
-}
-
-impl Env {
-    pub fn new() -> Self {
-        dotenv().ok();
-        Env {
-            username: env::var("DANBOORU_USERNAME").unwrap(),
-            api_key: env::var("DANBOORU_API_KEY").unwrap(),
-        }
-    }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let env = Env::new(); // load env vars
+    let args = Args::parse();
 
-    let auth = Auth::new(&env.username, &env.api_key);
+    let auth = Auth::new(&args.username, &args.api_key);
     let client = Client::danbooru(auth)?;
 
     // search "tags" builder
