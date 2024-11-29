@@ -83,7 +83,7 @@ pub struct Output {
     pub tag_template: String,
 
     /// Save images with specific file extension
-    #[arg(long)]
+    #[arg(short = 'E', long)]
     pub file_ext: Option<FileExt>,
 }
 

@@ -9,14 +9,15 @@ use booru::client::{Auth, Client};
 use clap::Parser;
 use futures::stream::{self, StreamExt};
 use futures::TryStreamExt;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use reqwest::{Method, Url};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 
-const PBAR_TEMPLATE: &str = "[{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} {msg}";
+const PBAR_TEMPLATE: &str =
+    "{spinner:.green} [{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} ({eta}) {msg}";
 
 fn build_query(tags: &str, score_min: i32, score_max: Option<i32>) -> Query {
     let mut builder = danbooru::SearchTagsBuilder::new();
@@ -107,9 +108,13 @@ async fn main() -> Result<()> {
 
     let query = build_query(&tags, score_min, score_max);
 
-    let bar = ProgressBar::new(num_posts as u64);
-    bar.set_style(ProgressStyle::with_template(PBAR_TEMPLATE)?);
-    bar.set_message(format!("{}, page: 1", &tags));
+    let multi_bar = MultiProgress::new();
+
+    // the total progress bar
+    let total_bar = multi_bar.add(ProgressBar::new(num_posts as u64));
+    let bar_style = ProgressStyle::default_bar().template(PBAR_TEMPLATE)?;
+    total_bar.set_style(bar_style.clone());
+    total_bar.set_message("Total Progress");
 
     // let shared_bar = Arc::new(tokio::sync::Mutex::new(bar));
     let tag_manager = Arc::new(utils::TagManager::new());
@@ -127,7 +132,7 @@ async fn main() -> Result<()> {
             break;
         }
 
-        let rest_posts = num_posts - bar.position() as u32;
+        let rest_posts = num_posts - total_bar.position() as u32;
         let required_posts = &posts
             .into_iter()
             .filter(|post| {
@@ -156,9 +161,13 @@ async fn main() -> Result<()> {
             .take(rest_posts as usize)
             .collect::<Vec<_>>();
 
+        let bar = multi_bar.add(ProgressBar::new(required_posts.len() as u64));
+        bar.set_style(bar_style.clone());
+        bar.set_message(format!("{}, page: 1", &tags));
+
         // firstly download images
         let _ = bar
-            .wrap_stream(stream::iter(required_posts.clone()))
+            .wrap_stream(stream::iter(required_posts.clone().iter()))
             .map(|post| {
                 let file_url = post.clone().file_url.unwrap();
                 let cloned_client = client.clone();
@@ -225,14 +234,21 @@ async fn main() -> Result<()> {
             .try_collect::<Vec<_>>()
             .await?;
 
-        if bar.position() as u32 >= num_posts {
+        bar.finish_with_message(format!("{}, page: {}, Done.", &tags, page));
+        total_bar.inc(required_posts.len() as u64);
+        if total_bar.position() as u32 >= num_posts {
             break;
         }
 
         page += 1;
-        bar.set_message(format!("{}, page: {}", &tags, page));
     }
-    bar.finish();
+    total_bar.finish_with_message("All Done.");
+    println!(
+        "Downloaded {} posts from {} with tags: {}",
+        num_posts,
+        args.domain.to_string(),
+        tags
+    );
 
     Ok(())
 }
