@@ -14,6 +14,7 @@ gather "shinosawa_hiro solo" \
     --connections 4 \
     --threads 16 \
     --num-posts 20 \
-    --tag-template "{people}|||{character}|||{copyright}|||{general}, {meta}|||{artist} style"
+    --file-ext webp \ # save as webp
+    --tag-template "{people}, {character}, {copyright}|||{general}, {meta}|||{artist} style"
 ```
 

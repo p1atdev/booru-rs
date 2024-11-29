@@ -26,11 +26,6 @@ pub struct Cli {
 
     #[arg(long, env = "DANBOORU_API_KEY", hide_env_values = true)]
     pub api_key: String,
-
-    #[arg(long, env = "DANBOORU_USERNAME", hide_env_values = true)]
-    pub username: String,
-    #[arg(long, env = "DANBOORU_API_KEY", hide_env_values = true)]
-    pub api_key: String,
 }
 
 #[derive(Parser, Debug, ValueEnum, Clone)]
@@ -87,9 +82,9 @@ pub struct Output {
     )]
     pub tag_template: String,
 
-    /// Optimization
-    #[arg(long, default_value = "none")]
-    pub optim: Optimization,
+    /// Save images with specific file extension
+    #[arg(long)]
+    pub file_ext: Option<FileExt>,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -102,11 +97,21 @@ pub struct Condition {
 }
 
 #[derive(ValueEnum, Debug, Clone)]
-pub enum Optimization {
-    /// do not compress images. fastest. default
-    None,
-    /// save as webp. slow but small file size
+pub enum FileExt {
     Webp,
+    Jpeg,
+    Png,
+}
+
+impl ToString for FileExt {
+    fn to_string(&self) -> String {
+        match self {
+            FileExt::Webp => "webp",
+            FileExt::Jpeg => "jpeg",
+            FileExt::Png => "png",
+        }
+        .to_string()
+    }
 }
 
 #[derive(Args, Debug, Clone)]

@@ -1,20 +1,20 @@
 mod args;
 mod utils;
 
-use anyhow::{bail, Context, Result};
-use args::{Cli, Optimization};
+use anyhow::{Context, Result};
+use args::{Cli, FileExt as SaveFileExt};
 use booru::board::danbooru::{response, search, Endpoint, FileExt, Query};
 use booru::board::{danbooru, BoardQuery, BoardSearchTagsBuilder};
 use booru::client::{Auth, Client};
 use clap::Parser;
 use futures::stream::{self, StreamExt};
+use futures::TryStreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::{Method, Url};
-use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
+use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use webp::Encoder;
 
 const PBAR_TEMPLATE: &str = "[{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} {msg}";
 
@@ -64,9 +64,9 @@ fn get_tag_path<P: AsRef<Path>>(base_dir: P, id: &i64) -> String {
         .to_string()
 }
 
-fn get_image_file_ext(optim: &Optimization, url: String) -> Result<String> {
-    match optim {
-        Optimization::None => {
+fn get_image_file_ext(file_ext: Option<SaveFileExt>, url: String) -> Result<String> {
+    match file_ext {
+        None => {
             let url = Url::parse(&url)?;
             let path = url.path();
             let file_ext = path
@@ -75,7 +75,7 @@ fn get_image_file_ext(optim: &Optimization, url: String) -> Result<String> {
                 .context("Failed to get file extension")?;
             Ok(file_ext.to_string())
         }
-        Optimization::Webp => Ok("webp".to_string()),
+        Some(ext) => Ok(ext.to_string()),
     }
 }
 
@@ -83,7 +83,7 @@ fn get_image_file_ext(optim: &Optimization, url: String) -> Result<String> {
 async fn main() -> Result<()> {
     let args = Cli::parse();
 
-    println!("{:?}", args);
+    // println!("{:?}", args);
 
     let auth = Auth::new(&args.username, &args.api_key);
     let client = Client::new(args.domain.board(), auth)?;
@@ -97,7 +97,7 @@ async fn main() -> Result<()> {
     let threads = args.output.threads;
     let overwrite = args.output.overwrite;
     let num_posts = args.output.num_posts;
-    let optim = Arc::new(args.output.optim);
+    let file_ext = args.output.file_ext;
     let tag_template = Arc::new(args.output.tag_template);
 
     // let cache_dir = &args.cache.cache_path;
@@ -110,7 +110,8 @@ async fn main() -> Result<()> {
     let bar = ProgressBar::new(num_posts as u64);
     bar.set_style(ProgressStyle::with_template(PBAR_TEMPLATE)?);
     bar.set_message(format!("{}, page: 1", &tags));
-    let shared_bar = Arc::new(tokio::sync::Mutex::new(bar));
+
+    // let shared_bar = Arc::new(tokio::sync::Mutex::new(bar));
     let tag_manager = Arc::new(utils::TagManager::new());
 
     let mut page = 1;
@@ -126,7 +127,7 @@ async fn main() -> Result<()> {
             break;
         }
 
-        let rest_posts = num_posts - shared_bar.clone().lock().await.position() as u32;
+        let rest_posts = num_posts - bar.position() as u32;
         let required_posts = &posts
             .into_iter()
             .filter(|post| {
@@ -141,7 +142,7 @@ async fn main() -> Result<()> {
                 // don't overwrite existing files~~
 
                 let ext =
-                    get_image_file_ext(optim.as_ref(), post.clone().file_url.unwrap()).unwrap();
+                    get_image_file_ext(file_ext.clone(), post.clone().file_url.unwrap()).unwrap();
                 let image_path = get_image_path(&output_dir.as_ref(), &post.id, &ext).unwrap();
                 let tag_path = get_tag_path(&output_dir.as_ref(), &post.id);
 
@@ -156,77 +157,57 @@ async fn main() -> Result<()> {
             .collect::<Vec<_>>();
 
         // firstly download images
-        stream::iter(required_posts.clone())
+        let _ = bar
+            .wrap_stream(stream::iter(required_posts.clone()))
             .map(|post| {
                 let file_url = post.clone().file_url.unwrap();
                 let cloned_client = client.clone();
 
-                tokio::spawn(async move {
+                async move {
                     // donwload the image
                     let res = cloned_client
                         .fetch_raw(Url::parse(&file_url)?, Method::GET)
                         .await?;
                     let bytes = res.bytes().await?;
                     Result::<_>::Ok((bytes, post))
-                })
+                }
             })
             .buffer_unordered(connections)
-            .map(|pair| pair?)
-            // then convert to webp
-            .map(|pair| match optim.clone().as_ref() {
-                Optimization::None => {
-                    return tokio::task::spawn_blocking(move || {
-                        let (bytes, post) = pair?;
-                        let bytes = bytes.deref().to_vec();
-                        Result::<_>::Ok((bytes, post))
-                    });
-                }
-                Optimization::Webp => tokio::task::spawn_blocking(move || {
-                    let (bytes, post) = pair?;
-                    let img = image::load_from_memory(&bytes)?;
-
-                    let encoder = match Encoder::from_image(&img) {
-                        Ok(encoder) => encoder,
-                        Err(e) => bail!("Failed to encode image: {}", e),
-                    };
-
-                    let bytes = encoder.encode_lossless().deref().to_vec();
-                    Result::<_>::Ok((bytes, post))
-                }),
+            // load the image
+            .map_ok(|(bytes, post)| async move {
+                let image = image::load_from_memory(&bytes)?;
+                Result::<_>::Ok((image, post))
             })
-            .buffer_unordered(threads)
-            .map(|pair| pair?)
-            // finally write to disk
-            .map(|pair| {
-                let cloned_bar = shared_bar.clone();
+            .try_buffer_unordered(threads)
+            .map_ok(|(image, post)| {
                 let cloned_output_dir = output_dir.clone();
-                let cloned_optim = optim.clone();
-                let cloned_tag_template = tag_template.clone();
-                let cloned_tag_manager = tag_manager.clone();
+                let cloned_file_ext = file_ext.clone();
 
-                tokio::spawn(async move {
-                    let (bytes, post) = pair?;
-
+                async move {
                     let file_ext = get_image_file_ext(
-                        &cloned_optim.as_ref(),
+                        cloned_file_ext,
                         post.clone().file_url.context("file_url must not be null")?,
                     )?;
                     let image_path =
                         get_image_path(&cloned_output_dir.as_ref(), &post.id, &file_ext)?;
-                    let tag_path = get_tag_path(&cloned_output_dir.as_ref(), &post.id);
 
                     // write the image
-                    let mut image_file = tokio::fs::OpenOptions::new()
-                        .write(true)
-                        .create(true)
-                        .truncate(true)
-                        .open(image_path)
-                        .await
-                        .expect("Failed to open image file");
-                    image_file.write_all(bytes.as_ref()).await?;
+                    image.save(image_path)?;
+
+                    Result::<_>::Ok(post)
+                }
+            })
+            .try_buffer_unordered(threads)
+            .map_ok(|post| {
+                let cloned_output_dir = output_dir.clone();
+                let cloned_tag_template = tag_template.clone();
+                let cloned_tag_manager = tag_manager.clone();
+
+                async move {
+                    let tag_path = get_tag_path(&cloned_output_dir.as_ref(), &post.id);
 
                     // write tags
-                    let mut tag_file = tokio::fs::OpenOptions::new()
+                    let mut tag_file = File::options()
                         .write(true)
                         .create(true)
                         .truncate(true)
@@ -235,28 +216,23 @@ async fn main() -> Result<()> {
                         .expect("Failed to open tag text file");
                     let tag_text = cloned_tag_manager.format_template(&cloned_tag_template, &post);
                     tag_file.write_all(tag_text.as_bytes()).await?;
-
-                    cloned_bar.lock().await.inc(1);
+                    tag_file.flush().await?;
 
                     Result::<_>::Ok(())
-                })
+                }
             })
-            .buffer_unordered(threads)
-            .collect::<Vec<_>>()
-            .await;
+            .try_buffer_unordered(threads)
+            .try_collect::<Vec<_>>()
+            .await?;
 
-        if shared_bar.clone().lock().await.position() as u32 >= num_posts {
+        if bar.position() as u32 >= num_posts {
             break;
         }
 
         page += 1;
-        shared_bar
-            .clone() // clone the Arc
-            .lock()
-            .await
-            .set_message(format!("{}, page: {}", &tags, page));
+        bar.set_message(format!("{}, page: {}", &tags, page));
     }
-    shared_bar.lock_owned().await.finish();
+    bar.finish();
 
     Ok(())
 }
