@@ -64,11 +64,11 @@ pub struct Output {
     pub connections: usize,
 
     /// How many threads to compress images and write to disk
-    #[arg(short, long, default_value_t = 16)]
+    #[arg(short, long, default_value_t = num_cpus::get())]
     pub threads: usize,
 
     /// Overwrite existing files
-    #[arg(long)]
+    #[arg(short = 'O', long)]
     pub overwrite: bool,
 
     /// How many posts to download
