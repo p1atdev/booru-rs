@@ -15,7 +15,8 @@ use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
-const PBAR_TEMPLATE: &str = "[{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} {msg}";
+const PBAR_TEMPLATE: &str =
+    "{spinner:.green} [{elapsed_precise}] {bar:50.cyan/blue} {pos:>7}/{len:7} ({eta}) {msg}";
 
 fn build_query(year: &u16, month: &u8, tags: &str) -> Query {
     let next_month = (month % 12) + 1;
