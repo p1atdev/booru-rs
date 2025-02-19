@@ -11,7 +11,7 @@ pub struct Cli {
     pub tags: String,
 
     #[command(flatten)]
-    pub date: Date,
+    pub id: Id,
 
     #[command(flatten)]
     pub output: Output,
@@ -48,6 +48,15 @@ impl ToString for Domain {
 }
 
 #[derive(Args, Debug, Clone)]
+pub struct Id {
+    #[arg(long, default_value_t = 1)]
+    pub id_start: u32,
+
+    #[arg(long)]
+    pub id_end: u32,
+}
+
+#[derive(Args, Debug, Clone)]
 pub struct Date {
     #[arg(long, default_value_t = 2024)]
     pub year_start: u16,
@@ -73,6 +82,9 @@ pub struct Output {
 
     #[arg(long, default_value_t = 4)]
     pub write_concurrency: usize,
+
+    #[arg(long, default_value_t = 8)]
+    pub max_requests_per_second: usize,
 
     #[arg(long)]
     pub overwrite: bool,

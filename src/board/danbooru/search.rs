@@ -29,7 +29,7 @@ impl<T: Display> ToString for Range<T> {
             Range::Min(min) => format!("{}..", min),
             Range::Max(max) => format!("..{}", max),
             Range::Exact(exact) => exact.to_string(),
-            Range::InEx { min, max } => format!("{}..<{}", min, max),
+            Range::InEx { min, max } => format!("{}...{}", min, max),
         }
     }
 }
@@ -39,6 +39,9 @@ pub type Score = Range<i32>;
 
 /// date range
 pub type Date = Range<String>;
+
+/// id range
+pub type Id = Range<u32>;
 
 // Order ascending or descending
 #[derive(Debug, Clone)]
@@ -189,6 +192,17 @@ impl SearchTagsBuilder {
             &dates
                 .iter()
                 .map(|d| d.to_string())
+                .collect::<Vec<String>>()
+                .join(","),
+        );
+    }
+
+    /// set id metatag
+    pub fn ids(&mut self, ids: Vec<Id>) {
+        self.append_metatag(
+            "id",
+            &ids.iter()
+                .map(|i| i.to_string())
                 .collect::<Vec<String>>()
                 .join(","),
         );

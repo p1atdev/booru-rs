@@ -12,6 +12,7 @@ use parquet::file::reader::{FileReader, SerializedFileReader};
 use parquet::record::Field;
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use reqwest::{Method, Url};
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufRead;
@@ -102,7 +103,7 @@ async fn fetch_wiki_page(client: &Client, title: &str) -> Result<response::WikiP
 
 fn load_tags_ds(repo_name: &str) -> Result<Vec<SerializedFileReader<File>>> {
     let api = Api::new()?;
-    let ds = from_hub(&api, repo_name.to_string())?;
+    let ds = from_hub(&api, repo_name.to_string(), Some("main".to_string()))?;
     Ok(ds)
 }
 
@@ -111,6 +112,21 @@ fn split_tags(tag_text: &str) -> Vec<String> {
         .split_terminator(", ")
         .map(|tag| tag.to_string())
         .collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub struct WikiPageWithCategory {
+    id: i64,
+    created_at: String,
+    updated_at: String,
+    title: String,
+    other_names: Vec<String>,
+    body: String,
+    is_locked: bool,
+    is_deleted: bool,
+
+    category: String,
+    tag: String,
 }
 
 #[tokio::main]
@@ -160,22 +176,56 @@ async fn main() -> Result<()> {
                             .par_bridge()
                             .map(|(column_name, value)| match value {
                                 Field::Str(value) => {
+                                    let target_tags_set = match column_name.as_str() {
+                                        "copyright" | "tag_string_copyright" => &copyright_tags,
+                                        "character" | "tag_string_character" => &character_tags,
+                                        "artist" | "tag_string_artist" => &artist_tags,
+                                        "general" | "tag_string_general" => &general_tags,
+                                        "meta" | "tag_string_meta" => &meta_tags,
+                                        _ => return anyhow::Result::<()>::Ok(()), // do nothing
+                                    };
                                     let target_tags = match column_name.as_str() {
-                                        "copyright" => &copyright_tags,
-                                        "character" => &character_tags,
-                                        "artist" => &artist_tags,
-                                        "general" => &general_tags,
-                                        "meta" => &meta_tags,
+                                        "copyright" | "character" | "artist" | "general"
+                                        | "meta" => split_tags(value.as_str())
+                                            .iter()
+                                            .map(|s| with_underscore(s))
+                                            .collect::<Vec<_>>(),
+                                        "tag_string_copyright"
+                                        | "tag_string_character"
+                                        | "tag_string_artist"
+                                        | "tag_string_general"
+                                        | "tag_string_meta" => value
+                                            .split_terminator(" ")
+                                            .map(|s| s.to_string())
+                                            .collect::<Vec<_>>(),
                                         _ => return anyhow::Result::<()>::Ok(()), // do nothing
                                     };
 
-                                    target_tags
-                                        .write()
-                                        .unwrap()
-                                        .extend(split_tags(value.as_str()));
+                                    target_tags_set.write().unwrap().extend(target_tags);
 
                                     anyhow::Result::<()>::Ok(())
                                 }
+                                //     // list of tags
+                                // Field::ListInternal(value) => {
+                                //     let target_tags = match column_name.as_str() {
+                                //         "copyright" => &copyright_tags,
+                                //         "character" => &character_tags,
+                                //         "artist" => &artist_tags,
+                                //         "general" => &general_tags,
+                                //         "meta" => &meta_tags,
+                                //         _ => return anyhow::Result::<()>::Ok(()), // do nothing
+                                //     };
+
+                                //     assert!(value.elements().iter().all(|e| match e {
+                                //         Field::Str(_) => true,
+                                //         _ => false,
+                                //     }));
+                                //     target_tags.write().unwrap().extend(
+                                //         value.elements().iter().map(|e| e.to_string()),
+                                //     );
+
+                                //     anyhow::Result::<()>::Ok(())
+                                // }
                                 _ => anyhow::Result::<()>::Ok(()), //  do nothing
                             })
                             .collect::<Result<Vec<_>>>()?;
@@ -204,14 +254,28 @@ async fn main() -> Result<()> {
     println!("general: {:?} tags", general_tags.len());
     println!("meta: {:?} tags", meta_tags.len());
 
+    // tag to category map
+    let mut tag_to_category = std::collections::HashMap::<String, String>::new();
+    for tag in &copyright_tags {
+        tag_to_category.insert(tag.clone(), "copyright".to_string());
+    }
+    for tag in &character_tags {
+        tag_to_category.insert(tag.clone(), "character".to_string());
+    }
+    for tag in &artist_tags {
+        tag_to_category.insert(tag.clone(), "artist".to_string());
+    }
+    for tag in &general_tags {
+        tag_to_category.insert(tag.clone(), "general".to_string());
+    }
+    for tag in &meta_tags {
+        tag_to_category.insert(tag.clone(), "meta".to_string());
+    }
+
     // 2. concat tags
-    let mut all_tags = copyright_tags
-        .iter()
-        .chain(character_tags.iter())
-        .chain(artist_tags.iter())
-        .chain(general_tags.iter())
-        .chain(meta_tags.iter())
-        .map(|tag| with_underscore(tag))
+    let mut all_tags = tag_to_category
+        .keys()
+        .map(|tag| tag.clone())
         .collect::<Vec<_>>();
 
     // create output directory
@@ -235,7 +299,7 @@ async fn main() -> Result<()> {
                 .into_iter()
                 .par_bridge()
                 .map(|line| {
-                    let wiki: response::WikiPage = serde_json::from_str(&line)?;
+                    let wiki: WikiPageWithCategory = serde_json::from_str(&line)?;
                     anyhow::Result::<_>::Ok(wiki.title)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
@@ -303,6 +367,7 @@ async fn main() -> Result<()> {
     let delay_time = Arc::new(std::time::Duration::from_secs_f64(
         1.0 / args.limit_per_sec as f64,
     ));
+    let tag_to_category = Arc::new(tag_to_category);
 
     let _ = pbar
         .wrap_stream(futures::stream::iter(all_tags))
@@ -310,20 +375,37 @@ async fn main() -> Result<()> {
             let client = client.clone();
             async move {
                 let wiki = fetch_wiki_page(&client, &tag.clone()).await?;
-                Ok(wiki)
+                Ok((tag, wiki))
             }
         })
         .buffer_unordered(num_connections)
-        .map(|wiki: Result<WikiPage, TagWikiError>| {
+        .map(|pair: Result<(String, WikiPage), TagWikiError>| {
             let file = output_file.clone();
             let not_founds = not_founds.clone();
             let delay_time = delay_time.clone();
+            let tag_to_category = tag_to_category.clone();
             async move {
-                match wiki {
-                    Result::Ok(wiki) => {
+                match pair {
+                    Result::Ok((tag, wiki)) => {
                         let mut file = file.lock().await;
                         let wiki_str = serde_json::to_string(&wiki)?;
-                        file.write_all(wiki_str.as_bytes()).await?;
+                        let wiki: response::WikiPage = serde_json::from_str(&wiki_str)?;
+                        let category = tag_to_category.get(&tag).unwrap();
+
+                        let wiki: WikiPageWithCategory = WikiPageWithCategory {
+                            id: wiki.id,
+                            created_at: wiki.created_at,
+                            updated_at: wiki.updated_at,
+                            title: wiki.title,
+                            other_names: wiki.other_names,
+                            body: wiki.body,
+                            is_locked: wiki.is_locked,
+                            is_deleted: wiki.is_deleted,
+                            category: category.clone(),
+                            tag: tag.clone(),
+                        };
+                        file.write_all(serde_json::to_string(&wiki).unwrap().as_bytes())
+                            .await?;
                         file.write_all(b"\n").await?;
                     }
                     Result::Err(e) => {

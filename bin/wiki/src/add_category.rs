@@ -36,7 +36,7 @@ fn with_underscore(tag: &str) -> String {
 
 fn load_tags_ds(repo_name: &str) -> Result<Vec<SerializedFileReader<File>>> {
     let api = Api::new()?;
-    let ds = from_hub(&api, repo_name.to_string())?;
+    let ds = from_hub(&api, repo_name.to_string(), Some("main".to_string()))?;
     Ok(ds)
 }
 

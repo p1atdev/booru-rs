@@ -13,11 +13,15 @@ fn sibling_to_parquet(rfilename: &str, repo: &ApiRepo) -> Result<SerializedFileR
     Ok(reader)
 }
 
-pub fn from_hub(api: &Api, dataset_id: String) -> Result<Vec<SerializedFileReader<File>>> {
+pub fn from_hub(
+    api: &Api,
+    dataset_id: String,
+    revision: Option<String>,
+) -> Result<Vec<SerializedFileReader<File>>> {
     let repo = Repo::with_revision(
         dataset_id,
         RepoType::Dataset,
-        "refs/convert/parquet".to_string(),
+        revision.unwrap_or("refs/convert/parquet".to_string()),
     );
     let repo = api.repo(repo);
     let info = repo.info()?;

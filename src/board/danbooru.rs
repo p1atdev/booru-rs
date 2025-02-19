@@ -82,7 +82,13 @@ impl BoardEndpoint for Endpoint {
         match self {
             Endpoint::Posts => "/posts.json".to_string(),
             Endpoint::Post(id) => format!("/posts/{}.json", id),
-            Endpoint::WikiPages(title) => format!("/wiki_pages/{}.json", self.urlencode(title)),
+            Endpoint::WikiPages(title) => {
+                // if title is number, add ~ prefix
+                if title.chars().all(char::is_numeric) {
+                    return format!("/wiki_pages/~{}.json", title);
+                }
+                format!("/wiki_pages/{}.json", self.urlencode(title))
+            }
         }
     }
 }
@@ -154,5 +160,13 @@ mod tests {
         query.limit(3);
         query.page(2);
         assert_eq!(query.to_string(), "tags=1girl&limit=3&page=2");
+    }
+
+    #[test]
+    fn test_fetch_number_title_wiki() {
+        let title = "2024";
+        let endpoint = Endpoint::WikiPages(title.to_string());
+
+        assert_eq!(endpoint.path(), "/wiki_pages/~2024.json");
     }
 }
