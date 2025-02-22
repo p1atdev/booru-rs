@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
         .expect("Failed to open file");
     let shared_output_file = Arc::new(Mutex::new(output_file));
     let delay = std::time::Duration::from_secs_f64(1.0 / max_requests_per_second as f64);
-    let bar = ProgressBar::new(u64::from(id_end - id_start));
+    let bar = ProgressBar::new(id_end as u64);
     bar.set_style(ProgressStyle::with_template(PBAR_TEMPLATE)?);
 
     let mut id_head = id_start;
